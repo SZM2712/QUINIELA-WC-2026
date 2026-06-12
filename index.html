@@ -859,7 +859,10 @@ async function renderAdmin(){
     h+='<div class="ucard"><div class="ucard-hdr"><span class="ucard-name">'+u.name+'<\/span><button class="dbtn" onclick="delU(\''+encodeURIComponent(u.name)+'\')">X<\/button><\/div><div class="ucard-body"><div class="ustat"><span class="usl">Codigo<\/span><span style="font-family:\'Bebas Neue\';font-size:15px;color:var(--gold);">'+( u.code||'—')+'<\/span><\/div><div class="ustat"><span class="usl">Estado<\/span>'+(u.locked?'<span style="color:#2a8a4c;">Confirmado<\/span>':'<span style="color:#a09020;">Abierto<\/span>')+'<\/div><div class="ustat"><span class="usl">Pts Grupos<\/span><span style="color:#4a9a6a;font-weight:700;">'+r.grPts+'<\/span><\/div><div class="ustat"><span class="usl">Pts Elim.<\/span><span style="color:#4a6a9a;font-weight:700;">'+r.koPts+'<\/span><\/div><div class="ustat"><span class="usl">Total<\/span><span style="color:var(--gold);font-weight:700;font-size:16px;">'+r.total+'<\/span><\/div>';
     if(u.locked)h+='<button class="abtn" style="font-size:9px;border-color:#3a2a10;color:#a07030;margin-top:4px;" onclick="unlockU(\''+encodeURIComponent(u.name)+'\')">Desbloquear<\/button>';
     h+='<\/div>';
-    h+='<div style="padding:5px 9px;border-top:1px solid var(--border);background:#0d1118;"><button class="abtn" style="font-size:9px;border-color:#1a3a50;color:#4a8ab0;width:100%;" onclick="toggleUBkt(\''+u.name+'\')" >Ver predicciones<\/button><\/div>';
+    h+='<div style="padding:5px 9px;border-top:1px solid var(--border);background:#0d1118;display:flex;gap:4px;flex-wrap:wrap;">';
+    if(!u.extended){h+='<button class="abtn" style="font-size:9px;border-color:#3a5a10;color:#6a9a30;" onclick="grantExt(\''+encodeURIComponent(u.name)+'\')">Dar ext.<\/button>';}
+    else{h+='<button class="abtn" style="font-size:9px;border-color:#5a3a10;color:#c07820;" onclick="revokeExt(\''+encodeURIComponent(u.name)+'\')">Revocar ext.<\/button>';}
+    h+='<button class="abtn" style="font-size:9px;border-color:#1a3a50;color:#4a8ab0;flex:1;" onclick="toggleUBkt(\''+u.name+'\')">Ver predicciones<\/button><\/div>';
         var uid='ubkt-'+btoa(unescape(encodeURIComponent(u.name))).replace(/[^a-zA-Z0-9]/g,'');
         h+='<div class="ubkt" id="'+uid+'">'+buildUBkt(u)+'<\/div>';
     h+='<\/div>';
@@ -935,7 +938,7 @@ async function setPhaseTeam(r,matchIdx,slot,name){
 }
 async function saveGrResults(){
   await stS('real_results',{gr:rr.gr||{},ko:rr.ko||{},savedAt:new Date().toISOString()});
-  var m2=document.getElementById('gr-save-msg');if(m){m.textContent='Guardado';setTimeout(function(){m.textContent='';},3000);}
+  var m=document.getElementById('gr-save-msg');if(m){m.textContent='Guardado';setTimeout(function(){m.textContent='';},3000);}
 }
 async function saveAll(){
   await stS('phases',phases);
