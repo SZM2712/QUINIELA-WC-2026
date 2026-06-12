@@ -696,7 +696,7 @@ async function renderAdmin(){
   var users=await getAllUsers();
   var allT=Object.values(TEAMS).flat();
   var h='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:7px;"><div style="font-family:\'Bebas Neue\';font-size:22px;letter-spacing:2px;color:var(--purple)">Admin Mundial 2026<\/div>';
-  h+='<div style="display:flex;gap:5px;flex-wrap:wrap;"><button class="abtn" onclick="renderAdmin()">Actualizar<\/button><button class="abtn" style="border-color:#1a3a22;color:#2a8a4c" onclick="expCSV()">Exportar<\/button><button class="abtn" style="border-color:#3a2a50;color:#9a7ab0" onclick="adm=false;renderAdmin()">Salir<\/button><button class="abtn" style="border-color:var(--red);color:var(--red)" onclick="nukeAll()">Borrar Todo<\/button><\/div><\/div>';
+  h+='<div style="display:flex;gap:5px;flex-wrap:wrap;"><button class="abtn" onclick="renderAdmin()">Actualizar<\/button><button class="abtn" style="border-color:#1a4a2c;color:#2a8a4c" onclick="rebuildIdx()">Reconstruir Indice<\/button><button class="abtn" style="border-color:#1a3050;color:#4a70b0" onclick="diagFB()">Diagnostico FB<\/button><button class="abtn" style="border-color:#1a3a22;color:#2a8a4c" onclick="expCSV()">Exportar<\/button><button class="abtn" style="border-color:#3a2a50;color:#9a7ab0" onclick="adm=false;renderAdmin()">Salir<\/button><button class="abtn" style="border-color:var(--red);color:var(--red)" onclick="nukeAll()">Borrar Todo<\/button><\/div><\/div>';
 
   // Phase management
   h+='<div class="asec"><div class="asectitle">Fases de Eliminatorias<\/div>';
