@@ -377,7 +377,29 @@ async function stD(k){
 async function getIdx(){return(await stG('__idx__'))||[];}
 async function addIdx(n){var i=await getIdx();if(!i.includes(n)){i.push(n);await stS('__idx__',i);}}
 async function delIdx(n){var i=(await getIdx()).filter(function(x){return x!==n;});await stS('__idx__',i);}
-async function getAllUsers(){var idx=await getIdx();var a=await Promise.all(idx.map(function(n){return stG('user_'+n);}));return a.filter(Boolean);}
+async function getAllUsers(){
+  var idx=await getIdx();
+  var a=await Promise.all(idx.map(async function(n){
+    var u=await stG('user_'+n);
+    if(!u)return null;
+    // If code not stored in user node, find it from code_ nodes
+    if(!u.code){
+      var db=await getDB();
+      if(db){
+        try{
+          var snap=await window._g(window._r(db,PFX));
+          if(snap.exists()){
+            var data=snap.val();
+            var codeKey=Object.keys(data).find(function(k){return k.startsWith('code_')&&data[k]&&data[k].name===n;});
+            if(codeKey)u.code=codeKey.replace('code_','');
+          }
+        }catch(e){}
+      }
+    }
+    return u;
+  }));
+  return a.filter(Boolean);
+}
 
 // Teams & Groups
 var TEAMS={
@@ -815,7 +837,7 @@ async function renderAdmin(){
 
   // Participants
   h+='<div class="asec"><div class="asectitle">Participantes ('+users.length+')<\/div>';
-  h+='<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end;margin-bottom:9px;"><div style="flex:1;min-width:150px;"><label class="ll">Nombre<\/label><input class="li" id="nn" type="text" placeholder="Ej: Juan Perez" maxlength="40" style="margin-bottom:0;" autocomplete="off"><\/div><button class="cbtn" onclick="createU()">Crear Codigo<\/button><\/div>';
+  h+='<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end;margin-bottom:9px;"><div style="flex:1;min-width:150px;"><label class="ll">Nombre<\/label><input class="li" id="nn" type="text" placeholder="Ej: Juan Perez" maxlength="40" style="margin-bottom:0;" autocomplete="off"><\/div><div style="min-width:120px;"><label class="ll">Codigo (opcional)<\/label><input class="li" id="nc-custom" type="text" placeholder="Ej: SZ2026" maxlength="10" style="margin-bottom:0;letter-spacing:3px;" autocomplete="off"><\/div><button class="cbtn" onclick="createU()">Crear Codigo<\/button><\/div>';
   h+='<div id="nr" style="display:none;background:#0d1a12;border:1px solid #1a3a22;padding:10px;margin-bottom:9px;"><div style="font-size:9px;letter-spacing:2px;color:var(--muted);margin-bottom:5px;">Codigo generado:<\/div><div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap;"><span id="nc" style="font-family:\'Bebas Neue\',sans-serif;font-size:26px;color:var(--gold);letter-spacing:4px;"><\/span><button onclick="copyC()" style="padding:3px 10px;background:transparent;border:1px solid var(--gold);color:var(--gold);font-family:\'Barlow Condensed\',sans-serif;font-size:10px;font-weight:700;cursor:pointer;">Copiar para WhatsApp<\/button><\/div><div id="nnd" style="font-size:11px;color:var(--muted);margin-top:3px;"><\/div><\/div>';
   h+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;">';
   users.forEach(function(u){
@@ -912,9 +934,13 @@ var lastCd='',lastNm='';
 async function createU(){
   var nn=document.getElementById('nn');var name=(nn.value||'').trim();
   if(!name){alert('Ingresa el nombre.');return;}
-  var ex=await stG('user_'+name);if(ex){alert('Ya existe.');return;}
-  var code=genCd(),tries=0;
-  while(await stG('code_'+code)&&tries<10){code=genCd();tries++;}
+  var ex=await stG('user_'+name);if(ex){alert('Ya existe ese nombre.');return;}
+  var customEl=document.getElementById('nc-custom');
+  var custom=(customEl?customEl.value||'':'').trim().toUpperCase();
+  var code=custom||genCd();
+  var tries=0;
+  if(!custom){while(await stG('code_'+code)&&tries<10){code=genCd();tries++;}}
+  else{var exCode=await stG('code_'+code);if(exCode){alert('Ese codigo ya existe.');return;}}
   await stS('code_'+code,{name:name,createdAt:new Date().toISOString()});
   await stS('user_'+name,{name:name,code:code,grSc:{},koSc:{},locked:false,savedAt:new Date().toISOString()});
   await addIdx(name);lastCd=code;lastNm=name;
@@ -930,6 +956,15 @@ async function delU(enc){
   var name=decodeURIComponent(enc);if(!confirm('Eliminar a '+name+'?'))return;
   var u=await stG('user_'+name);if(u&&u.code)await stD('code_'+u.code);
   await stD('user_'+name);await delIdx(name);renderAdmin();
+}
+async function lockAll(){
+  if(!confirm('Bloquear a TODOS los participantes que no han confirmado?'))return;
+  var users=await getAllUsers();
+  var pending=users.filter(function(u){return !u.locked;});
+  if(!pending.length){alert('Todos ya tienen la quiniela confirmada.');return;}
+  await Promise.all(pending.map(function(u){u.locked=true;return stS('user_'+u.name,u);}));
+  alert('Se bloquearon '+pending.length+' participantes: '+pending.map(function(u){return u.name;}).join(', '));
+  renderAdmin();
 }
 async function unlockU(enc){
   var name=decodeURIComponent(enc);if(!confirm('Desbloquear grupos de '+name+'?'))return;
