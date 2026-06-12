@@ -116,6 +116,22 @@ h1 span{color:var(--gold);}
 .ustat{display:flex;align-items:center;gap:4px;margin-bottom:3px;font-size:11px;}
 .usl{color:var(--muted);flex:1;}
 .rbtn{display:block;margin:11px auto 0;padding:7px 20px;background:transparent;border:1px solid var(--red);color:var(--red);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:11px;letter-spacing:3px;text-transform:uppercase;cursor:pointer;}
+.ubkt{display:none;border-top:2px solid var(--border);background:#08090f;}
+.ubkt.open{display:block;}
+.ubkt-gg{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:5px;padding:8px;}
+.ubkt-gc{background:var(--panel);border:1px solid var(--border);overflow:hidden;font-size:10px;}
+.ubkt-gh{background:var(--dark3);padding:3px 7px;display:flex;align-items:center;gap:5px;border-bottom:1px solid var(--border);}
+.ubkt-gl{font-family:'Bebas Neue',sans-serif;font-size:15px;color:var(--gold);}
+.ubkt-row{display:flex;align-items:center;padding:3px 7px;border-bottom:1px solid #141c28;gap:3px;}
+.ubkt-row:last-child{border-bottom:none;}
+.ubkt-t{flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:600;}
+.ubkt-sc{font-family:'Bebas Neue',sans-serif;font-size:13px;color:var(--gold);min-width:28px;text-align:center;}
+.ubkt-ko{padding:8px;}
+.ubkt-ko-rounds{display:flex;gap:5px;flex-wrap:wrap;}
+.ubkt-ko-r{background:var(--panel);border:1px solid var(--border);padding:5px 7px;min-width:100px;}
+.ubkt-ko-rt{font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:1px;color:var(--muted);margin-bottom:3px;}
+.ubkt-ko-m{font-size:10px;padding:1px 0;display:flex;align-items:center;gap:3px;}
+.ubkt-ko-w{color:var(--gold);font-weight:700;}
 </style>
 </head>
 <body>
@@ -686,6 +702,60 @@ async function renderRanking(){
 }
 
 // ── ADMIN ─────────────────────────────────────
+function toggleUBkt(name){
+  var id='ubkt-'+btoa(unescape(encodeURIComponent(name))).replace(/[^a-zA-Z0-9]/g,'');
+  var el=document.getElementById(id);if(el)el.classList.toggle('open');
+}
+function buildUBkt(u){
+  var gr=u.grSc||{};
+  var ko=u.koSc||{};
+  var h='<div class="ubkt-gg">';
+  GS.forEach(function(g){
+    var T=TEAMS[g],s=cSt(g,gr),order=s.order;
+    h+='<div class="ubkt-gc"><div class="ubkt-gh"><div class="ubkt-gl">'+g+'<\/div><\/div>';
+    var b2=['b1','b2','b3','b4'];
+    order.forEach(function(idx,rank){
+      h+='<div style="display:flex;align-items:center;padding:2px 7px;gap:3px;font-size:10px;'+(rank<2?'background:#0d1a12;':'')+(rank===2?'background:#0d1220;':'')+' border-bottom:1px solid #141c28;">';
+      h+='<span class="pbadge '+b2[rank]+'">'+(rank+1)+'<\/span>';
+      h+='<span style="flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:600;">'+T[idx].f+' '+T[idx].n+'<\/span>';
+      h+='<span style="color:var(--gold);font-weight:700;font-size:11px;">'+s.pts[idx]+'<\/span><\/div>';
+    });
+    MU.forEach(function(p,mi){
+      var sc=gr[g]?gr[g][mi]:null;
+      if(!sc||sc.h===null||sc.a===null)return;
+      h+='<div class="ubkt-row"><span class="ubkt-t">'+T[p[0]].f+' '+T[p[0]].n+'<\/span><span class="ubkt-sc">'+sc.h+':'+sc.a+'<\/span><span class="ubkt-t" style="text-align:right">'+T[p[1]].n+' '+T[p[1]].f+'<\/span><\/div>';
+    });
+    h+='<\/div>';
+  });
+  h+='<\/div>';
+  // KO rounds
+  h+='<div class="ubkt-ko"><div style="font-family:\'Bebas Neue\',sans-serif;font-size:13px;letter-spacing:2px;color:var(--muted);margin-bottom:6px;">Eliminatorias<\/div><div class="ubkt-ko-rounds">';
+  KO_ROUNDS.forEach(function(r){
+    var ph=phases[r];
+    if(!ph||!ph.open)return;
+    var teams=ph.teams||[];
+    var n=KO_SIZES[r];
+    h+='<div class="ubkt-ko-r"><div class="ubkt-ko-rt">'+KO_NAMES[r]+'<\/div>';
+    var any=false;
+    for(var i=0;i<n;i++){
+      var sc=ko[r]?ko[r][i]:null;
+      if(!sc||sc.h===null||sc.a===null)continue;
+      var hn=teams[i*2]||'?',an=teams[i*2+1]||'?';
+      var hf=getFlagByName(hn),af=getFlagByName(an);
+      var hw=sc.h>sc.a,aw=sc.a>sc.h;
+      h+='<div class="ubkt-ko-m">';
+      h+='<span class="ubkt-ko-w" style="'+(hw?'':'opacity:.4')+'">'+hf+' '+hn+'<\/span>';
+      h+='<span style="color:var(--muted);padding:0 3px;">'+sc.h+'-'+sc.a+'<\/span>';
+      h+='<span class="ubkt-ko-w" style="'+(aw?'':'opacity:.4')+'">'+an+' '+af+'<\/span>';
+      h+='<\/div>';
+      any=true;
+    }
+    if(!any)h+='<div style="font-size:9px;color:var(--muted);">Sin predicciones<\/div>';
+    h+='<\/div>';
+  });
+  h+='<\/div><\/div>';
+  return h;
+}
 async function renderAdmin(){
   var wrap=document.getElementById('awrap');if(!wrap)return;
   if(!adm){
@@ -752,7 +822,11 @@ async function renderAdmin(){
     var r=calcUserPoints(u,rr);
     h+='<div class="ucard"><div class="ucard-hdr"><span class="ucard-name">'+u.name+'<\/span><button class="dbtn" onclick="delU(\''+encodeURIComponent(u.name)+'\')">X<\/button><\/div><div class="ucard-body"><div class="ustat"><span class="usl">Codigo<\/span><span style="font-family:\'Bebas Neue\';font-size:15px;color:var(--gold);">'+( u.code||'—')+'<\/span><\/div><div class="ustat"><span class="usl">Estado<\/span>'+(u.locked?'<span style="color:#2a8a4c;">Confirmado<\/span>':'<span style="color:#a09020;">Abierto<\/span>')+'<\/div><div class="ustat"><span class="usl">Pts Grupos<\/span><span style="color:#4a9a6a;font-weight:700;">'+r.grPts+'<\/span><\/div><div class="ustat"><span class="usl">Pts Elim.<\/span><span style="color:#4a6a9a;font-weight:700;">'+r.koPts+'<\/span><\/div><div class="ustat"><span class="usl">Total<\/span><span style="color:var(--gold);font-weight:700;font-size:16px;">'+r.total+'<\/span><\/div>';
     if(u.locked)h+='<button class="abtn" style="font-size:9px;border-color:#3a2a10;color:#a07030;margin-top:4px;" onclick="unlockU(\''+encodeURIComponent(u.name)+'\')">Desbloquear<\/button>';
-    h+='<\/div><\/div>';
+    h+='<\/div>';
+    h+='<div style="padding:5px 9px;border-top:1px solid var(--border);background:#0d1118;"><button class="abtn" style="font-size:9px;border-color:#1a3a50;color:#4a8ab0;width:100%;" onclick="toggleUBkt(\''+u.name+'\')" >Ver predicciones<\/button><\/div>';
+        var uid='ubkt-'+btoa(unescape(encodeURIComponent(u.name))).replace(/[^a-zA-Z0-9]/g,'');
+        h+='<div class="ubkt" id="'+uid+'">'+buildUBkt(u)+'<\/div>';
+    h+='<\/div>';
   });
   h+='<\/div><\/div>';
   wrap.innerHTML=h;
@@ -787,8 +861,10 @@ function renderRRGrupos(){
     });
     h+='<\/div><\/div>';
   });
-  h+='<\/div>';cont.innerHTML=h;
-  GS.forEach(function(g){MU.forEach(function(p,mi){var sc=rr.gr&&rr.gr[g]?rr.gr[g][mi]:null;sc=sc||{h:null,a:null};var hi=document.getElementById('rg'+g+'m'+mi+'h'),ai=document.getElementById('rg'+g+'m'+mi+'a');if(hi&&sc.h!==null)hi.value=sc.h;if(ai&&sc.a!==null)ai.value=sc.a;});});
+  h+='<\/div>';
+  h+='<div style="margin-top:10px;display:flex;align-items:center;gap:10px;"><button class="cbtn" onclick="saveGrResults()">Guardar Resultados Grupos<\/button><span id="gr-save-msg" style="font-size:11px;color:#2a8a4c;"><\/span><\/div>';
+  cont.innerHTML=h;
+  GS.forEach(function(g){MU.forEach(function(p,mi){var sc=rr.gr&&rr.gr[g]?rr.gr[g][mi]:null;sc=sc||{h:null,a:null};var hi=cont.querySelector('#rg'+g+'m'+mi+'h'),ai=cont.querySelector('#rg'+g+'m'+mi+'a');if(hi&&sc.h!==null)hi.value=sc.h;if(ai&&sc.a!==null)ai.value=sc.a;});});
 }
 
 function setRRGr(g,mi,side,val){
@@ -820,6 +896,10 @@ async function setPhaseTeam(r,matchIdx,slot,name){
   if(!phases[r])phases[r]={open:true,teams:[]};
   if(!phases[r].teams)phases[r].teams=Array(KO_SIZES[r]*2).fill('');
   phases[r].teams[matchIdx*2+slot]=name;
+}
+async function saveGrResults(){
+  await stS('real_results',{gr:rr.gr||{},ko:rr.ko||{},savedAt:new Date().toISOString()});
+  var m=document.getElementById('gr-save-msg');if(m){m.textContent='Guardado';setTimeout(function(){m.textContent='';},3000);}
 }
 async function saveAll(){
   await stS('phases',phases);
@@ -908,7 +988,7 @@ function showTab(t,btn){
   document.getElementById('tab-'+t).classList.add('active');
   if(btn)btn.classList.add('active');
   if(t==='elim')renderElim();
-  if(t==='ranking')renderRanking();
+  if(t==='ranking'){renderRanking();if(window._rankTimer)clearInterval(window._rankTimer);window._rankTimer=setInterval(renderRanking,60000);}
   if(t==='admin')renderAdmin();
 }
 function renderAll(){renderGrupos();renderElim();}
