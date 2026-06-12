@@ -168,6 +168,7 @@ h1 span{color:var(--gold);}
     </div>
     <div id="lk-locked" style="display:none;font-size:12px;color:#2a8a4c;font-weight:600;">Grupos confirmados &mdash; solo lectura</div>
     <div id="lk-past" style="display:none;font-size:12px;color:var(--red);">Plazo vencido &mdash; grupos bloqueados</div>
+    <div id="lk-ext" style="display:none;font-size:12px;color:#c07820;font-weight:600;">&#9201; Extension activa &mdash; puedes editar</div>
   </div>
   <div class="tabs">
     <button class="tab active" onclick="showTab('grupos',this)">Grupos</button>
@@ -427,7 +428,7 @@ var KO_PTS_WIN=1, KO_PTS_EXACT=3;
 var GR_PTS_WIN=1, GR_PTS_EXACT=3;
 
 // State
-var CU=null,adm=false,uLk=false,uCd='';
+var CU=null,adm=false,uLk=false,uCd='',uExt=false;
 var grSc={};  // user group scores
 var koSc={};  // user ko scores per round {h,a} indexed
 var phases={};// admin phase config: {open:bool, teams:[32 team names for r32, etc]}
@@ -466,15 +467,26 @@ function tickCd(){
   if(diff>0)setTimeout(tickCd,1000);
 }
 
-function isPast(){return Date.now()>=DEADLINE.getTime();}
+function isPast(){if(uExt)return false;return Date.now()>=DEADLINE.getTime();}
 function isGrLocked(){return uLk||isPast();}
 
 // Save/load
 var saveTimer=null;
 function sched(){clearTimeout(saveTimer);saveTimer=setTimeout(doSave,900);}
+async function checkExt(){
+  if(!CU||CU==='__adm__')return;
+  try{
+    var u=await stG('user_'+CU);
+    if(u&&u.extended&&!uExt){
+      uExt=true;uLk=false;applyLk();renderGrupos();
+      alert('El admin te dio una extension. Ya puedes editar.');
+    }
+  }catch(e){}
+  setTimeout(checkExt,30000);
+}
 async function doSave(){
   if(!CU||CU==='__adm__')return;
-  await stS('user_'+CU,{name:CU,code:uCd,scores:grSc,koSc:koSc,locked:uLk,savedAt:new Date().toISOString()});
+  await stS('user_'+CU,{name:CU,code:uCd,scores:grSc,koSc:koSc,locked:uLk,extended:uExt,savedAt:new Date().toISOString()});
   await addIdx(CU);
   var el=document.getElementById('sind');
   if(el){el.style.display='inline-block';clearTimeout(el._t);el._t=setTimeout(function(){el.style.display='none';},2000);}
@@ -522,18 +534,18 @@ async function doLogin(){
     CU=ud.name;try{localStorage.setItem(PFX+'lc',uCd);}catch(e){}
     initUserState();
     var saved=await stG('user_'+CU);
-    if(saved){restoreUser(saved);uLk=saved.locked||false;}
+    if(saved){restoreUser(saved);uLk=saved.locked||false;uExt=saved.extended||false;}
     await loadPhases();
     document.getElementById('utag').textContent=CU;
     document.getElementById('ls').style.display='none';
     document.getElementById('app').style.display='block';
-    renderAll();applyLk();
+    renderAll();applyLk();setTimeout(checkExt,30000);
   }catch(e){ee.textContent='Error: '+e.message;console.error(e);}
   be.textContent='ENTRAR';be.disabled=false;
 }
 function doLogout(){
   if(!confirm('Salir?'))return;
-  CU=null;adm=false;uLk=false;uCd='';
+  CU=null;adm=false;uLk=false;uCd='';uExt=false;
   document.getElementById('app').style.display='none';
   document.getElementById('ls').style.display='flex';
   document.getElementById('lpass').value='';
@@ -548,11 +560,13 @@ async function confirmar(){
   renderGrupos();
 }
 function applyLk(){
-  var gl=isGrLocked();
-  document.getElementById('lk-open').style.display=(!uLk&&!isPast())?'flex':'none';
-  document.getElementById('lk-locked').style.display=uLk?'flex':'none';
-  document.getElementById('lk-past').style.display=(!uLk&&isPast())?'block':'none';
-  document.getElementById('lkbar').style.background=uLk?'#0d1a12':isPast()?'#1a0808':'#1a1020';
+  var realPast=Date.now()>=DEADLINE.getTime();
+  var past=realPast&&!uExt;
+  document.getElementById('lk-open').style.display=(!uLk&&!past)?'flex':'none';
+  document.getElementById('lk-locked').style.display=(uLk&&!uExt)?'flex':'none';
+  document.getElementById('lk-past').style.display=(!uLk&&past)?'block':'none';
+  var extEl=document.getElementById('lk-ext');if(extEl)extEl.style.display=uExt?'flex':'none';
+  document.getElementById('lkbar').style.background=uExt?'#1a1200':uLk?'#0d1a12':past?'#1a0808':'#1a1020';
 }
 
 // ── GRUPOS ────────────────────────────────────
@@ -965,6 +979,17 @@ async function lockAll(){
   await Promise.all(pending.map(function(u){u.locked=true;return stS('user_'+u.name,u);}));
   alert('Se bloquearon '+pending.length+' participantes: '+pending.map(function(u){return u.name;}).join(', '));
   renderAdmin();
+}
+async function grantExt(enc){
+  var name=decodeURIComponent(enc);
+  if(!confirm('Dar extension a '+name+'? Podra editar aunque el plazo haya vencido.'))return;
+  var u=await stG('user_'+name);if(!u){alert('No encontrado.');return;}
+  u.extended=true;u.locked=false;await stS('user_'+name,u);
+  alert('Extension dada. '+name+' debe recargar la pagina.');renderAdmin();
+}
+async function revokeExt(enc){
+  var name=decodeURIComponent(enc);
+  var u=await stG('user_'+name);if(u){u.extended=false;await stS('user_'+name,u);}renderAdmin();
 }
 async function unlockU(enc){
   var name=decodeURIComponent(enc);if(!confirm('Desbloquear grupos de '+name+'?'))return;
