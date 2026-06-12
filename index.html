@@ -179,6 +179,9 @@ h1 span{color:var(--gold);}
     <div class="awrap" id="awrap"></div>
   </div>
 </div>
+
+
+
 <script>
 'use strict';
 var APAS='Admin2026', FEE=25, CUR='Q.', PFX='mw26_';
@@ -320,18 +323,7 @@ async function renderMatchday(){
   });
   cont.innerHTML=h;
   setTimeout(renderMatchday,60000);
-}async function renderMatchday(){
-  var cont=document.getElementById('matchday');if(!cont)return;
-  var matches=getTodayMatches();
-  if(!matches.length){
-    var now=new Date(),start2=new Date('2026-06-11T00:00:00-04:00'),end2=new Date('2026-07-19T23:59:00-04:00');
-    if(now<start2)cont.innerHTML='<div style="font-size:10px;color:var(--muted);text-align:center;">El torneo comienza el 11 de junio<\/div>';
-    else if(now>end2)cont.innerHTML='<div style="font-size:10px;color:var(--muted);text-align:center;">El torneo ha concluido<\/div>';
-    else cont.innerHTML='<div style="font-size:10px;color:var(--muted);text-align:center;">No hay partidos de grupos hoy<\/div>';
-    return;
-  }
-
-var FB={
+}var FB={
   apiKey:'AIzaSyC6iLH3S6zt3CHKUFHCt_gZfwWnk6JlOTs',
   authDomain:'quiniela-wc-2026.firebaseapp.com',
   databaseURL:'https://quiniela-wc-2026-default-rtdb.firebaseio.com',
@@ -891,10 +883,8 @@ function showTab(t,btn){
   if(t==='ranking')renderRanking();
   if(t==='admin')renderAdmin();
 }
-}
 function renderAll(){renderGrupos();renderElim();}
 
 </script>
-
 </body>
 </html>
