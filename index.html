@@ -318,7 +318,7 @@ async function renderMatchday(){
   }
   var rrData=null;
   try{rrData=await stG('real_results');}catch(e){}
-  var grR=rrData&&rrData.scores?rrData.scores:{};
+  var grR=rrData&&rrData.gr?rrData.gr:{};
   var h='<div style="font-size:9px;letter-spacing:2px;color:var(--gold);text-transform:uppercase;margin-bottom:6px;text-align:center;">Partidos de hoy<\/div>';
   matches.forEach(function(match){
     var result=null;
@@ -959,7 +959,7 @@ async function createU(){
   if(!custom){while(await stG('code_'+code)&&tries<10){code=genCd();tries++;}}
   else{var exCode=await stG('code_'+code);if(exCode){alert('Ese codigo ya existe.');return;}}
   await stS('code_'+code,{name:name,createdAt:new Date().toISOString()});
-  await stS('user_'+name,{name:name,code:code,grSc:{},koSc:{},locked:false,savedAt:new Date().toISOString()});
+  await stS('user_'+name,{name:name,code:code,scores:{},koSc:{},locked:false,savedAt:new Date().toISOString()});
   await addIdx(name);lastCd=code;lastNm=name;
   var nr=document.getElementById('nr'),nc=document.getElementById('nc'),nnd=document.getElementById('nnd');
   if(nr)nr.style.display='block';if(nc)nc.textContent=code;if(nnd)nnd.textContent='Participante: '+name;if(nn)nn.value='';
