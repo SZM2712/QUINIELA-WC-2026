@@ -317,7 +317,7 @@ async function renderMatchday(){
   }
   var rrData=null;
   try{rrData=await stG('real_results');}catch(e){}
-  var grR=rrData&&rrData.grSc?rrData.grSc:{};
+  var grR=rrData&&rrData.scores?rrData.scores:{};
   var h='<div style="font-size:9px;letter-spacing:2px;color:var(--gold);text-transform:uppercase;margin-bottom:6px;text-align:center;">Partidos de hoy<\/div>';
   matches.forEach(function(match){
     var result=null;
@@ -452,13 +452,13 @@ var saveTimer=null;
 function sched(){clearTimeout(saveTimer);saveTimer=setTimeout(doSave,900);}
 async function doSave(){
   if(!CU||CU==='__adm__')return;
-  await stS('user_'+CU,{name:CU,code:uCd,grSc:grSc,koSc:koSc,locked:uLk,savedAt:new Date().toISOString()});
+  await stS('user_'+CU,{name:CU,code:uCd,scores:grSc,koSc:koSc,locked:uLk,savedAt:new Date().toISOString()});
   await addIdx(CU);
   var el=document.getElementById('sind');
   if(el){el.style.display='inline-block';clearTimeout(el._t);el._t=setTimeout(function(){el.style.display='none';},2000);}
 }
 function restoreUser(s){
-  if(s.grSc)GS.forEach(function(g){if(s.grSc[g])s.grSc[g].forEach(function(r,i){if(r)grSc[g][i]={h:r.h!=null?r.h:null,a:r.a!=null?r.a:null};});});
+  if(s.scores)GS.forEach(function(g){if(s.scores[g])s.scores[g].forEach(function(r,i){if(r)grSc[g][i]={h:r.h!=null?r.h:null,a:r.a!=null?r.a:null};});});
   if(s.koSc)KO_ROUNDS.forEach(function(r){if(s.koSc[r])s.koSc[r].forEach(function(k,i){if(koSc[r][i]&&k)koSc[r][i]={h:k.h!=null?k.h:null,a:k.a!=null?k.a:null};});});
 }
 async function loadPhases(){
@@ -649,7 +649,7 @@ function calcUserPoints(u,rrData){
   if(rrData&&rrData.gr){
     GS.forEach(function(g){
       MU.forEach(function(p,mi){
-        var pred=u.grSc&&u.grSc[g]?u.grSc[g][mi]:null;
+        var pred=u.scores&&u.scores[g]?u.scores[g][mi]:null;
         var real=rrData.gr[g]?rrData.gr[g][mi]:null;
         if(!pred||pred.h===null||pred.a===null||!real||real.h===null||real.a===null)return;
         var predW=pred.h>pred.a?'h':pred.a>pred.h?'a':'d';
@@ -707,7 +707,7 @@ function toggleUBkt(name){
   var el=document.getElementById(id);if(el)el.classList.toggle('open');
 }
 function buildUBkt(u){
-  var gr=u.grSc||{};
+  var gr=u.scores||{};
   var ko=u.koSc||{};
   var h='<div class="ubkt-gg">';
   GS.forEach(function(g){
@@ -899,7 +899,7 @@ async function setPhaseTeam(r,matchIdx,slot,name){
 }
 async function saveGrResults(){
   await stS('real_results',{gr:rr.gr||{},ko:rr.ko||{},savedAt:new Date().toISOString()});
-  var m=document.getElementById('gr-save-msg');if(m){m.textContent='Guardado';setTimeout(function(){m.textContent='';},3000);}
+  var m2=document.getElementById('gr-save-msg');if(m){m.textContent='Guardado';setTimeout(function(){m.textContent='';},3000);}
 }
 async function saveAll(){
   await stS('phases',phases);
