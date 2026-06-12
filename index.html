@@ -860,6 +860,23 @@ function chkAdm(){
   if(v.toLowerCase()===APAS.toLowerCase()){adm=true;loadPhases().then(function(){loadRR().then(function(){renderAdmin();});});}
   else{document.getElementById('aerr').textContent='Contrasena incorrecta.';}
 }
+async function diagFB(){
+  var db=await getDB();
+  if(!db){alert('Sin Firebase.');return;}
+  try{
+    var snap=await window._g(window._r(db,PFX));
+    if(!snap.exists()){alert('Firebase vacio con prefijo: '+PFX);return;}
+    var data=snap.val();
+    var keys=Object.keys(data);
+    var lines=['PREFIJO: '+PFX,''];
+    lines.push('Claves ('+keys.length+'): '+keys.join(', '));
+    var users=keys.filter(function(k){return k.startsWith('u_');});
+    var codes=keys.filter(function(k){return k.startsWith('c_');});
+    lines.push('Usuarios: '+users.join(', '));
+    lines.push('Codigos: '+codes.join(', '));
+    alert(lines.join('\n'));
+  }catch(e){alert('Error: '+e.message);}
+}
 async function rebuildIdx(){
   if(!confirm('Reconstruir indice? Busca todos los usuarios en Firebase.'))return;
   var db=await getDB();if(!db){alert('Sin conexion Firebase.');return;}
