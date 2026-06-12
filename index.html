@@ -358,10 +358,10 @@ async function stD(k){
   try{var db=await getDB();if(db)await window._d(window._r(db,PFX+k));}catch(e){}
   try{localStorage.removeItem(PFX+k);}catch(e){}
 }
-async function getIdx(){return(await stG('idx'))||[];}
-async function addIdx(n){var i=await getIdx();if(!i.includes(n)){i.push(n);await stS('idx',i);}}
-async function delIdx(n){var i=(await getIdx()).filter(function(x){return x!==n;});await stS('idx',i);}
-async function getAllUsers(){var idx=await getIdx();var a=await Promise.all(idx.map(function(n){return stG('u_'+n);}));return a.filter(Boolean);}
+async function getIdx(){return(await stG('__idx__'))||[];}
+async function addIdx(n){var i=await getIdx();if(!i.includes(n)){i.push(n);await stS('__idx__',i);}}
+async function delIdx(n){var i=(await getIdx()).filter(function(x){return x!==n;});await stS('__idx__',i);}
+async function getAllUsers(){var idx=await getIdx();var a=await Promise.all(idx.map(function(n){return stG('user_'+n);}));return a.filter(Boolean);}
 
 // Teams & Groups
 var TEAMS={
@@ -436,7 +436,7 @@ var saveTimer=null;
 function sched(){clearTimeout(saveTimer);saveTimer=setTimeout(doSave,900);}
 async function doSave(){
   if(!CU||CU==='__adm__')return;
-  await stS('u_'+CU,{name:CU,code:uCd,grSc:grSc,koSc:koSc,locked:uLk,savedAt:new Date().toISOString()});
+  await stS('user_'+CU,{name:CU,code:uCd,grSc:grSc,koSc:koSc,locked:uLk,savedAt:new Date().toISOString()});
   await addIdx(CU);
   var el=document.getElementById('sind');
   if(el){el.style.display='inline-block';clearTimeout(el._t);el._t=setTimeout(function(){el.style.display='none';},2000);}
@@ -479,11 +479,11 @@ async function doLogin(){
   try{
     var ud=null;
     var candidates=[code,code.toUpperCase(),code.toLowerCase()];
-    for(var i=0;i<candidates.length;i++){var d=await stG('c_'+candidates[i]);if(d&&d.name){ud=d;uCd=candidates[i].toUpperCase();break;}}
+    for(var i=0;i<candidates.length;i++){var d=await stG('code_'+candidates[i]);if(d&&d.name){ud=d;uCd=candidates[i].toUpperCase();break;}}
     if(!ud){ee.textContent='Codigo no valido.';be.textContent='ENTRAR';be.disabled=false;return;}
     CU=ud.name;try{localStorage.setItem(PFX+'lc',uCd);}catch(e){}
     initUserState();
-    var saved=await stG('u_'+CU);
+    var saved=await stG('user_'+CU);
     if(saved){restoreUser(saved);uLk=saved.locked||false;}
     await loadPhases();
     document.getElementById('utag').textContent=CU;
@@ -832,11 +832,11 @@ var lastCd='',lastNm='';
 async function createU(){
   var nn=document.getElementById('nn');var name=(nn.value||'').trim();
   if(!name){alert('Ingresa el nombre.');return;}
-  var ex=await stG('u_'+name);if(ex){alert('Ya existe.');return;}
+  var ex=await stG('user_'+name);if(ex){alert('Ya existe.');return;}
   var code=genCd(),tries=0;
-  while(await stG('c_'+code)&&tries<10){code=genCd();tries++;}
-  await stS('c_'+code,{name:name,createdAt:new Date().toISOString()});
-  await stS('u_'+name,{name:name,code:code,grSc:{},koSc:{},locked:false,savedAt:new Date().toISOString()});
+  while(await stG('code_'+code)&&tries<10){code=genCd();tries++;}
+  await stS('code_'+code,{name:name,createdAt:new Date().toISOString()});
+  await stS('user_'+name,{name:name,code:code,grSc:{},koSc:{},locked:false,savedAt:new Date().toISOString()});
   await addIdx(name);lastCd=code;lastNm=name;
   var nr=document.getElementById('nr'),nc=document.getElementById('nc'),nnd=document.getElementById('nnd');
   if(nr)nr.style.display='block';if(nc)nc.textContent=code;if(nnd)nnd.textContent='Participante: '+name;if(nn)nn.value='';
@@ -848,12 +848,12 @@ async function copyC(){
 }
 async function delU(enc){
   var name=decodeURIComponent(enc);if(!confirm('Eliminar a '+name+'?'))return;
-  var u=await stG('u_'+name);if(u&&u.code)await stD('c_'+u.code);
-  await stD('u_'+name);await delIdx(name);renderAdmin();
+  var u=await stG('user_'+name);if(u&&u.code)await stD('code_'+u.code);
+  await stD('user_'+name);await delIdx(name);renderAdmin();
 }
 async function unlockU(enc){
   var name=decodeURIComponent(enc);if(!confirm('Desbloquear grupos de '+name+'?'))return;
-  var u=await stG('u_'+name);if(u){u.locked=false;await stS('u_'+name,u);}renderAdmin();
+  var u=await stG('user_'+name);if(u){u.locked=false;await stS('user_'+name,u);}renderAdmin();
 }
 function chkAdm(){
   var v=document.getElementById('ap').value;
@@ -870,8 +870,8 @@ async function diagFB(){
     var keys=Object.keys(data);
     var lines=['PREFIJO: '+PFX,''];
     lines.push('Claves ('+keys.length+'): '+keys.join(', '));
-    var users=keys.filter(function(k){return k.startsWith('u_');});
-    var codes=keys.filter(function(k){return k.startsWith('c_');});
+    var users=keys.filter(function(k){return k.startsWith('user_');});
+    var codes=keys.filter(function(k){return k.startsWith('code_');});
     lines.push('Usuarios: '+users.join(', '));
     lines.push('Codigos: '+codes.join(', '));
     alert(lines.join('\n'));
@@ -883,14 +883,14 @@ async function rebuildIdx(){
   var snap=await window._g(window._r(db,PFX));
   if(!snap.exists()){alert('No hay datos en Firebase.');return;}
   var data=snap.val();
-  var names=Object.keys(data).filter(function(k){return k.startsWith('u_');}).map(function(k){return k.replace('u_','');});
-  await stS('idx',names);
+  var names=Object.keys(data).filter(function(k){return k.startsWith('user_');}).map(function(k){return k.replace('user_','');});
+  await stS('__idx__',names);
   alert('Indice reconstruido: '+names.join(', '));
   renderAdmin();
 }
 async function nukeAll(){
   if(!confirm('Borrar TODO?'))return;if(!confirm('Seguro?'))return;
-  await stD('idx');await stD('phases');await stD('real_results');
+  await stD('__idx__');await stD('phases');await stD('real_results');
   Object.keys(localStorage).filter(function(k){return k.startsWith(PFX);}).forEach(function(k){localStorage.removeItem(k);});
   alert('Borrado.');location.reload();
 }
