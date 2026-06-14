@@ -816,7 +816,7 @@ async function renderAdmin(){
     h+='<div style="display:flex;gap:5px;align-items:center;">';
     if(!open){h+='<button class="cbtn" style="padding:4px 12px;font-size:10px;" onclick="openPhase(\''+r+'\')">Habilitar<\/button>';}
     else if(!locked){h+='<span style="color:#2a8a4c;font-size:11px;font-weight:700;">ABIERTA<\/span><button class="abtn" style="border-color:var(--red);color:var(--red);font-size:9px;" onclick="lockPhase(\''+r+'\')">Cerrar predicciones<\/button>';}
-    else{h+='<span style="color:var(--muted);font-size:11px;">CERRADA<\/span>';}
+    else{h+='<span style="color:var(--muted);font-size:11px;">CERRADA<\/span><button class="abtn" style="border-color:#1a4a2c;color:#2a8a4c;font-size:9px;" onclick="reopenPhase(\''+r+'\')">Reabrir<\/button>';}
     h+='<\/div><\/div>';
     if(open){
       h+='<div style="padding:8px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:5px;">';
@@ -929,6 +929,12 @@ async function lockPhase(r){
   if(!confirm('Cerrar predicciones de '+KO_NAMES[r]+'? Los usuarios ya no podran cambiarlas.'))return;
   if(!phases[r])phases[r]={};
   phases[r].locked=true;
+  await stS('phases',phases);renderAdmin();
+}
+async function reopenPhase(r){
+  if(!confirm('Reabrir '+KO_NAMES[r]+'? Los usuarios podran volver a editar sus predicciones de esta fase.'))return;
+  if(!phases[r])phases[r]={};
+  phases[r].locked=false;
   await stS('phases',phases);renderAdmin();
 }
 async function setPhaseTeam(r,matchIdx,slot,name){
