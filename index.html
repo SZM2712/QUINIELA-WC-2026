@@ -736,24 +736,20 @@ async function renderRanking(){
   var prizeAmts=[pot*PRIZE[0],pot*PRIZE[1],pot*PRIZE[2],FEE];
   var ranked=users.map(function(u){var r=calcUserPoints(u,rr);return{name:u.name,pts:r.total,grPts:r.grPts,koPts:r.koPts};}).sort(function(a,b){return b.pts-a.pts;});
 
-  // Assign actual rank position (1,2,3,4...) to each user; ties share the SAME position number
-  // but each position keeps its OWN fixed prize, split only among those tied at that position.
-  var rows=[];
-  var rank=0; // 0-based rank position, increases by 1 per user (ties repeat same rank)
-  var prevPts=null;
-  ranked.forEach(function(u,idx){
-    if(idx===0){rank=0;}
-    else if(u.pts===prevPts){/* same rank as previous */}
-    else{rank=idx;}
-    prevPts=u.pts;
-    rows.push({u:u,pos:rank});
+  // Assign prize-rank by DISTINCT score group: the group with the highest points is
+  // "1st place" (rank 0), the next distinct lower score is "2nd place" (rank 1), etc.
+  // Ties within a group share that rank and split only that rank's prize.
+  var groups=[];
+  ranked.forEach(function(u){
+    var last=groups[groups.length-1];
+    if(last&&last.pts===u.pts)last.members.push(u);
+    else groups.push({pts:u.pts,members:[u]});
   });
-  // Count how many share each rank position (only matters for ranks 0-3, the prized ones)
-  var posCounts={};
-  rows.forEach(function(row){posCounts[row.pos]=(posCounts[row.pos]||0)+1;});
-  rows.forEach(function(row){
-    row.span=posCounts[row.pos];
-    row.share=(row.pos<4)?prizeAmts[row.pos]/row.span:0;
+  var rows=[];
+  groups.forEach(function(grp,gi){
+    var span=grp.members.length;
+    var share=(gi<4)?prizeAmts[gi]/span:0;
+    grp.members.forEach(function(u){rows.push({u:u,pos:gi,span:span,share:share});});
   });
 
   var prizes={first:prizeAmts[0],second:prizeAmts[1],third:prizeAmts[2],fourth:prizeAmts[3]};
