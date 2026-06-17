@@ -132,6 +132,10 @@ h1 span{color:var(--gold);}
 .ubkt-ko-rt{font-family:'Bebas Neue',sans-serif;font-size:11px;letter-spacing:1px;color:var(--muted);margin-bottom:3px;}
 .ubkt-ko-m{font-size:10px;padding:1px 0;display:flex;align-items:center;gap:3px;}
 .ubkt-ko-w{color:var(--gold);font-weight:700;}
+.evol-svg{width:100%;height:auto;background:var(--panel);border:1px solid var(--border);}
+.evol-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;max-width:1100px;}
+.evol-leg-item{display:flex;align-items:center;gap:5px;font-size:11px;}
+.evol-leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -174,6 +178,7 @@ h1 span{color:var(--gold);}
     <button class="tab active" onclick="showTab('grupos',this)">Grupos</button>
     <button class="tab" onclick="showTab('elim',this)">Eliminatorias</button>
     <button class="tab" onclick="showTab('ranking',this)">Ranking</button>
+    <button class="tab" onclick="showTab('evol',this)">Evolucion</button>
     <button class="tab atab" onclick="showTab('admin',this)">Admin</button>
   </div>
   <div id="tab-grupos" class="view active">
@@ -190,6 +195,12 @@ h1 span{color:var(--gold);}
   <div id="tab-ranking" class="view">
     <div style="max-width:1100px;margin:0 auto;padding:10px 0;">
       <div id="rank-cont"><div style="text-align:center;padding:20px;color:var(--muted);">Cargando...</div></div>
+    </div>
+  </div>
+  <div id="tab-evol" class="view">
+    <div style="max-width:1100px;margin:0 auto;padding:10px 0;">
+      <div class="ibox">Evolucion de puntos totales de cada participante por dia. El admin guarda un snapshot diario desde su panel.</div>
+      <div id="evol-cont"><div style="text-align:center;padding:20px;color:var(--muted);">Cargando...</div></div>
     </div>
   </div>
   <div id="tab-admin" class="view">
@@ -759,6 +770,108 @@ async function renderRanking(){
   cont.innerHTML=h;
 }
 
+// ── EVOLUCION ─────────────────────────────────
+function calcUserPointsUpTo(u,rrData,cutoffDate){
+  var total=0,grPts=0,koPts=0;
+  if(rrData&&rrData.gr){
+    GS.forEach(function(g){
+      MU.forEach(function(p,mi){
+        var pred=u.scores&&u.scores[g]?u.scores[g][mi]:null;
+        var real=rrData.gr[g]?rrData.gr[g][mi]:null;
+        if(!pred||pred.h===null||pred.a===null||!real||real.h===null||real.a===null)return;
+        var hn=TEAMS[g][p[0]].n,an=TEAMS[g][p[1]].n;
+        var sm=SCHEDULE.find(function(m){return m.g===g&&((m.h===hn&&m.a===an)||(m.h===an&&m.a===hn));});
+        if(sm&&sm.d>cutoffDate)return; // match hasn't happened yet as of cutoff
+        var predW=pred.h>pred.a?'h':pred.a>pred.h?'a':'d';
+        var realW=real.h>real.a?'h':real.a>real.h?'a':'d';
+        if(predW===realW)grPts+=GR_PTS_WIN;
+        if(pred.h===real.h&&pred.a===real.a)grPts+=GR_PTS_EXACT;
+      });
+    });
+  }
+  if(rrData&&rrData.ko){
+    KO_ROUNDS.forEach(function(r){
+      var n=KO_SIZES[r];
+      for(var i=0;i<n;i++){
+        var pred=u.koSc&&u.koSc[r]?u.koSc[r][i]:null;
+        var real=rrData.ko[r]?rrData.ko[r][i]:null;
+        if(!pred||pred.h===null||pred.a===null||!real||real.h===null||real.a===null)continue;
+        var predW=pred.h>pred.a?'h':pred.a>pred.h?'a':'draw';
+        var realW=real.h>real.a?'h':real.a>real.h?'a':'draw';
+        if(predW===realW)koPts+=KO_PTS_WIN;
+        if(pred.h===real.h&&pred.a===real.a)koPts+=KO_PTS_EXACT;
+      }
+    });
+  }
+  total=grPts+koPts;
+  return total;
+}
+function getPlayedDates(rrData){
+  var dates={};
+  if(rrData&&rrData.gr){
+    GS.forEach(function(g){
+      MU.forEach(function(p,mi){
+        var real=rrData.gr[g]?rrData.gr[g][mi]:null;
+        if(!real||real.h===null||real.a===null)return;
+        var hn=TEAMS[g][p[0]].n,an=TEAMS[g][p[1]].n;
+        var sm=SCHEDULE.find(function(m){return m.g===g&&((m.h===hn&&m.a===an)||(m.h===an&&m.a===hn));});
+        if(sm)dates[sm.d]=true;
+      });
+    });
+  }
+  return Object.keys(dates).sort();
+}
+async function renderEvol(){
+  var cont=document.getElementById('evol-cont');if(!cont)return;
+  cont.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);">Calculando...<\/div>';
+  await loadRR();
+  var users=await getAllUsers();
+  var dates=getPlayedDates(rr);
+  if(!dates.length||!users.length){cont.innerHTML='<div style="text-align:center;padding:24px;color:var(--muted);">Aun no hay resultados de partidos guardados.<\/div>';return;}
+  var nameList=users.map(function(u){return u.name;});
+  // Build history matrix: hist[date][name] = cumulative points up to that date
+  var hist={};
+  dates.forEach(function(d){
+    hist[d]={};
+    users.forEach(function(u){hist[d][u.name]=calcUserPointsUpTo(u,rr,d);});
+  });
+  var colors=['#D4AF37','#4a9a6a','#4a6a9a','#c0392b','#9a7ab0','#c07820','#2a8a8a','#a04090','#6a9a30','#9aa0aa','#e07050','#5050e0'];
+  var W=1000,H=420,padL=40,padR=20,padT=20,padB=40;
+  var maxPts=1;
+  dates.forEach(function(d){nameList.forEach(function(n){var v=hist[d][n];if(v!==undefined&&v>maxPts)maxPts=v;});});
+  maxPts=Math.ceil(maxPts*1.15)||1;
+  function xPos(i){return padL+(dates.length>1?i/(dates.length-1):0)*(W-padL-padR);}
+  function yPos(v){return H-padB-(v/maxPts)*(H-padT-padB);}
+  var svg='<svg class="evol-svg" viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg">';
+  for(var gl=0;gl<=4;gl++){
+    var gv=Math.round(maxPts*gl/4),gy=yPos(gv);
+    svg+='<line x1="'+padL+'" y1="'+gy+'" x2="'+(W-padR)+'" y2="'+gy+'" stroke="#2a3040" stroke-width="1"/>';
+    svg+='<text x="'+(padL-8)+'" y="'+(gy+4)+'" fill="#6a7585" font-size="11" text-anchor="end">'+gv+'<\/text>';
+  }
+  dates.forEach(function(d,i){
+    if(dates.length>12&&i%Math.ceil(dates.length/12)!==0&&i!==dates.length-1)return;
+    var lbl=d.slice(5).replace('-','\/');
+    svg+='<text x="'+xPos(i)+'" y="'+(H-padB+16)+'" fill="#6a7585" font-size="9" text-anchor="middle">'+lbl+'<\/text>';
+  });
+  nameList.forEach(function(name,ni){
+    var color=colors[ni%colors.length];
+    var pts=[];
+    dates.forEach(function(d,i){pts.push(xPos(i)+','+yPos(hist[d][name]));});
+    svg+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+color+'" stroke-width="2.5" opacity="0.9"/>';
+    dates.forEach(function(d,i){svg+='<circle cx="'+xPos(i)+'" cy="'+yPos(hist[d][name])+'" r="3" fill="'+color+'"/>';});
+  });
+  svg+='<\/svg>';
+  var lastDate=dates[dates.length-1];
+  var ranked=nameList.map(function(n){return{n:n,pts:hist[lastDate][n]};}).sort(function(a,b){return b.pts-a.pts;});
+  var legend='<div class="evol-legend">';
+  ranked.forEach(function(u){
+    var ni=nameList.indexOf(u.n),color=colors[ni%colors.length];
+    legend+='<div class="evol-leg-item"><span class="evol-leg-dot" style="background:'+color+'"><\/span>'+u.n+' ('+u.pts+'pts)<\/div>';
+  });
+  legend+='<\/div>';
+  cont.innerHTML=svg+legend;
+}
+
 // ── ADMIN ─────────────────────────────────────
 function toggleUBkt(name){
   var id='ubkt-'+btoa(unescape(encodeURIComponent(name))).replace(/[^a-zA-Z0-9]/g,'');
@@ -824,7 +937,7 @@ async function renderAdmin(){
   var users=await getAllUsers();
   var allT=Object.values(TEAMS).flat();
   var h='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:7px;"><div style="font-family:\'Bebas Neue\';font-size:22px;letter-spacing:2px;color:var(--purple)">Admin Mundial 2026<\/div>';
-  h+='<div style="display:flex;gap:5px;flex-wrap:wrap;"><button class="abtn" onclick="renderAdmin()">Actualizar<\/button><button class="abtn" style="border-color:#1a4a2c;color:#2a8a4c" onclick="rebuildIdx()">Reconstruir Indice<\/button><button class="abtn" style="border-color:#1a3050;color:#4a70b0" onclick="diagFB()">Diagnostico FB<\/button><button class="abtn" style="border-color:#1a3a22;color:#2a8a4c" onclick="expCSV()">Exportar<\/button><button class="abtn" style="border-color:#3a2a50;color:#9a7ab0" onclick="adm=false;renderAdmin()">Salir<\/button><button class="abtn" style="border-color:var(--red);color:var(--red)" onclick="nukeAll()">Borrar Todo<\/button><\/div><\/div>';
+  h+='<div style="display:flex;gap:5px;flex-wrap:wrap;"><button class="abtn" onclick="renderAdmin()">Actualizar<\/button><button class="abtn" style="border-color:#1a4a2c;color:#2a8a4c" onclick="rebuildIdx()">Reconstruir Indice<\/button><button class="abtn" style="border-color:#1a3050;color:#4a70b0" onclick="diagFB()">Diagnostico FB<\/button><button class="abtn" style="border-color:#1a4a2c;color:#2a8a4c" onclick="lockAll()">Bloquear Todos<\/button><button class="abtn" style="border-color:#1a3a22;color:#2a8a4c" onclick="expCSV()">Exportar<\/button><button class="abtn" style="border-color:#3a2a50;color:#9a7ab0" onclick="adm=false;renderAdmin()">Salir<\/button><button class="abtn" style="border-color:var(--red);color:var(--red)" onclick="nukeAll()">Borrar Todo<\/button><\/div><\/div>';
 
   // Phase management
   h+='<div class="asec"><div class="asectitle">Fases de Eliminatorias<\/div>';
@@ -1080,6 +1193,7 @@ function showTab(t,btn){
   if(btn)btn.classList.add('active');
   if(t==='elim')renderElim();
   if(t==='ranking'){renderRanking();if(window._rankTimer)clearInterval(window._rankTimer);window._rankTimer=setInterval(renderRanking,60000);}
+  if(t==='evol')renderEvol();
   if(t==='admin')renderAdmin();
 }
 function renderAll(){renderGrupos();renderElim();}
