@@ -736,22 +736,24 @@ async function renderRanking(){
   var prizeAmts=[pot*PRIZE[0],pot*PRIZE[1],pot*PRIZE[2],FEE];
   var ranked=users.map(function(u){var r=calcUserPoints(u,rr);return{name:u.name,pts:r.total,grPts:r.grPts,koPts:r.koPts};}).sort(function(a,b){return b.pts-a.pts;});
 
-  // Group by tied points to assign shared positions and split prizes
-  var groups=[];
-  ranked.forEach(function(u){
-    var last=groups[groups.length-1];
-    if(last&&last.pts===u.pts)last.members.push(u);
-    else groups.push({pts:u.pts,members:[u]});
-  });
+  // Assign actual rank position (1,2,3,4...) to each user; ties share the SAME position number
+  // but each position keeps its OWN fixed prize, split only among those tied at that position.
   var rows=[];
-  var posIdx=0; // 0-based index into prizeAmts/medals for the starting position of each group
-  groups.forEach(function(grp){
-    var span=grp.members.length;
-    var amt=0;
-    for(var k=posIdx;k<posIdx+span&&k<4;k++)amt+=prizeAmts[k];
-    var share=span>0?amt/span:0;
-    grp.members.forEach(function(u){rows.push({u:u,startPos:posIdx,span:span,share:share});});
-    posIdx+=span;
+  var rank=0; // 0-based rank position, increases by 1 per user (ties repeat same rank)
+  var prevPts=null;
+  ranked.forEach(function(u,idx){
+    if(idx===0){rank=0;}
+    else if(u.pts===prevPts){/* same rank as previous */}
+    else{rank=idx;}
+    prevPts=u.pts;
+    rows.push({u:u,pos:rank});
+  });
+  // Count how many share each rank position (only matters for ranks 0-3, the prized ones)
+  var posCounts={};
+  rows.forEach(function(row){posCounts[row.pos]=(posCounts[row.pos]||0)+1;});
+  rows.forEach(function(row){
+    row.span=posCounts[row.pos];
+    row.share=(row.pos<4)?prizeAmts[row.pos]/row.span:0;
   });
 
   var prizes={first:prizeAmts[0],second:prizeAmts[1],third:prizeAmts[2],fourth:prizeAmts[3]};
@@ -760,7 +762,7 @@ async function renderRanking(){
   h+='<table class="rtbl"><thead><tr><th>Pos<\/th><th>Participante<\/th><th class="rr">Grupos<\/th><th class="rr">Eliminatorias<\/th><th class="rr">Total<\/th><th class="rr">Premio<\/th><\/tr><\/thead><tbody>';
   var medals=['🥇','🥈','🥉','4'];
   rows.forEach(function(row){
-    var u=row.u,i=row.startPos,span=row.span;
+    var u=row.u,i=row.pos,span=row.span;
     var col=i===0?'var(--gold)':i===1?'#9aa0aa':i===2?'#a07040':'var(--muted)';
     var posLabel=(i<4?medals[i]:String(i+1));
     var prizeLabel=row.share>0?CUR+row.share.toFixed(0)+(span>1?' c\/u':''):'—';
