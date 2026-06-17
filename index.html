@@ -722,16 +722,38 @@ async function renderRanking(){
   var users=await getAllUsers();
   var n=users.length,total=n*FEE;
   var pot=Math.max(0,total-FEE);
-  var prizes={first:pot*PRIZE[0],second:pot*PRIZE[1],third:pot*PRIZE[2],fourth:FEE};
+  var prizeAmts=[pot*PRIZE[0],pot*PRIZE[1],pot*PRIZE[2],FEE];
   var ranked=users.map(function(u){var r=calcUserPoints(u,rr);return{name:u.name,pts:r.total,grPts:r.grPts,koPts:r.koPts};}).sort(function(a,b){return b.pts-a.pts;});
+
+  // Group by tied points to assign shared positions and split prizes
+  var groups=[];
+  ranked.forEach(function(u){
+    var last=groups[groups.length-1];
+    if(last&&last.pts===u.pts)last.members.push(u);
+    else groups.push({pts:u.pts,members:[u]});
+  });
+  var rows=[];
+  var posIdx=0; // 0-based index into prizeAmts/medals for the starting position of each group
+  groups.forEach(function(grp){
+    var span=grp.members.length;
+    var amt=0;
+    for(var k=posIdx;k<posIdx+span&&k<4;k++)amt+=prizeAmts[k];
+    var share=span>0?amt/span:0;
+    grp.members.forEach(function(u){rows.push({u:u,startPos:posIdx,span:span,share:share});});
+    posIdx+=span;
+  });
+
+  var prizes={first:prizeAmts[0],second:prizeAmts[1],third:prizeAmts[2],fourth:prizeAmts[3]};
   var h='<div class="rank-banner"><div class="pi"><div class="pilbl">Participantes<\/div><div class="pival" style="color:var(--text)">'+n+'<\/div><\/div><div class="pi"><div class="pilbl">Pozo<\/div><div class="pival" style="color:var(--gold)">'+CUR+total.toFixed(0)+'<\/div><\/div><div class="pi"><div class="pilbl">1er Lugar<\/div><div class="pival" style="color:var(--gold)">'+CUR+prizes.first.toFixed(0)+'<\/div><\/div><div class="pi"><div class="pilbl">2do Lugar<\/div><div class="pival" style="color:#9aa0aa">'+CUR+prizes.second.toFixed(0)+'<\/div><\/div><div class="pi"><div class="pilbl">3er Lugar<\/div><div class="pival" style="color:#a07040">'+CUR+prizes.third.toFixed(0)+'<\/div><\/div><div class="pi"><div class="pilbl">4to Lugar<\/div><div class="pival" style="color:var(--muted)">Recupera '+CUR+FEE+'<\/div><\/div><\/div>';
   if(!n){cont.innerHTML=h+'<div style="text-align:center;padding:24px;color:var(--muted);">Aun no hay participantes.<\/div>';return;}
   h+='<table class="rtbl"><thead><tr><th>Pos<\/th><th>Participante<\/th><th class="rr">Grupos<\/th><th class="rr">Eliminatorias<\/th><th class="rr">Total<\/th><th class="rr">Premio<\/th><\/tr><\/thead><tbody>';
   var medals=['🥇','🥈','🥉','4'];
-  ranked.forEach(function(u,i){
-    var prize=i===0?CUR+prizes.first.toFixed(0):i===1?CUR+prizes.second.toFixed(0):i===2?CUR+prizes.third.toFixed(0):i===3?CUR+prizes.fourth.toFixed(0):'—';
+  rows.forEach(function(row){
+    var u=row.u,i=row.startPos,span=row.span;
     var col=i===0?'var(--gold)':i===1?'#9aa0aa':i===2?'#a07040':'var(--muted)';
-    h+='<tr><td style="font-family:\'Bebas Neue\',sans-serif;font-size:20px;color:'+col+';">'+( i<4?medals[i]:i+1)+'<\/td><td style="font-weight:700;">'+u.name+'<\/td><td style="text-align:right;color:#4a9a6a;">'+u.grPts+'<\/td><td style="text-align:right;color:#4a6a9a;">'+u.koPts+'<\/td><td style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:20px;color:var(--gold);">'+u.pts+'<\/td><td style="text-align:right;color:'+col+';">'+prize+'<\/td><\/tr>';
+    var posLabel=(i<4?medals[i]:String(i+1))+(span>1?' (empate x'+span+')':'');
+    var prizeLabel=row.share>0?CUR+row.share.toFixed(0)+(span>1?' c\/u':''):'—';
+    h+='<tr><td style="font-family:\'Bebas Neue\',sans-serif;font-size:'+(span>1?'14':'20')+'px;color:'+col+';">'+posLabel+'<\/td><td style="font-weight:700;">'+u.name+'<\/td><td style="text-align:right;color:#4a9a6a;">'+u.grPts+'<\/td><td style="text-align:right;color:#4a6a9a;">'+u.koPts+'<\/td><td style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:20px;color:var(--gold);">'+u.pts+'<\/td><td style="text-align:right;color:'+col+';">'+prizeLabel+'<\/td><\/tr>';
   });
   h+='<\/tbody><\/table>';
   cont.innerHTML=h;
