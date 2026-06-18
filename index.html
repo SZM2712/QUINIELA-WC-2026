@@ -212,7 +212,7 @@ h1 span{color:var(--gold);}
       <div id="evol-cont"><div style="text-align:center;padding:20px;color:var(--muted);">Cargando...</div></div>
       <div style="margin-top:14px;">
         <label class="ll">Filtrar participante</label>
-        <select id="evol-filter" class="li" style="margin-bottom:10px;" onchange="renderEvolDetail(this.value)">
+        <select id="evol-filter" class="li" style="margin-bottom:10px;" onchange="drawEvolChart(this.value);renderEvolDetail(this.value)">
           <option value="">Todos (sin detalle)</option>
         </select>
       </div>
@@ -849,10 +849,33 @@ async function renderEvol(){
     hist[d]={};
     users.forEach(function(u){hist[d][u.name]=calcUserPointsUpTo(u,rr,d);});
   });
+  // Cache everything needed to redraw the chart on filter change
+  window._evolUsers=users;
+  window._evolHist=hist;
+  window._evolDates=dates;
+  window._evolNames=nameList;
+
+  drawEvolChart('');
+
+  // Populate filter dropdown
+  var sel=document.getElementById('evol-filter');
+  if(sel){
+    var prevVal=sel.value;
+    var opts=['<option value="">Todos<\/option>'];
+    nameList.slice().sort().forEach(function(n){opts.push('<option value="'+n.replace(/"/g,'&quot;')+'">'+n+'<\/option>');});
+    sel.innerHTML=opts.join('');
+    if(prevVal&&nameList.includes(prevVal)){sel.value=prevVal;drawEvolChart(prevVal);renderEvolDetail(prevVal);}
+  }
+}
+function drawEvolChart(filterName){
+  var cont=document.getElementById('evol-cont');if(!cont)return;
+  var hist=window._evolHist,dates=window._evolDates,nameList=window._evolNames;
+  if(!hist||!dates){return;}
   var colors=['#D4AF37','#4a9a6a','#4a6a9a','#c0392b','#9a7ab0','#c07820','#2a8a8a','#a04090','#6a9a30','#9aa0aa','#e07050','#5050e0'];
   var W=1000,H=420,padL=40,padR=20,padT=20,padB=40;
+  var activeNames=filterName?[filterName]:nameList;
   var maxPts=1;
-  dates.forEach(function(d){nameList.forEach(function(n){var v=hist[d][n];if(v!==undefined&&v>maxPts)maxPts=v;});});
+  dates.forEach(function(d){activeNames.forEach(function(n){var v=hist[d][n];if(v!==undefined&&v>maxPts)maxPts=v;});});
   maxPts=Math.ceil(maxPts*1.15)||1;
   function xPos(i){return padL+(dates.length>1?i/(dates.length-1):0)*(W-padL-padR);}
   function yPos(v){return H-padB-(v/maxPts)*(H-padT-padB);}
@@ -867,7 +890,8 @@ async function renderEvol(){
     var lbl=d.slice(5).replace('-','\/');
     svg+='<text x="'+xPos(i)+'" y="'+(H-padB+16)+'" fill="#6a7585" font-size="9" text-anchor="middle">'+lbl+'<\/text>';
   });
-  nameList.forEach(function(name,ni){
+  activeNames.forEach(function(name){
+    var ni=nameList.indexOf(name);
     var color=colors[ni%colors.length];
     var pts=[];
     dates.forEach(function(d,i){pts.push(xPos(i)+','+yPos(hist[d][name]));});
@@ -876,7 +900,7 @@ async function renderEvol(){
   });
   svg+='<\/svg>';
   var lastDate=dates[dates.length-1];
-  var ranked=nameList.map(function(n){return{n:n,pts:hist[lastDate][n]};}).sort(function(a,b){return b.pts-a.pts;});
+  var ranked=activeNames.map(function(n){return{n:n,pts:hist[lastDate][n]};}).sort(function(a,b){return b.pts-a.pts;});
   var legend='<div class="evol-legend">';
   ranked.forEach(function(u){
     var ni=nameList.indexOf(u.n),color=colors[ni%colors.length];
@@ -884,17 +908,6 @@ async function renderEvol(){
   });
   legend+='<\/div>';
   cont.innerHTML=svg+legend;
-
-  // Populate filter dropdown
-  var sel=document.getElementById('evol-filter');
-  if(sel){
-    var prevVal=sel.value;
-    var opts=['<option value="">Todos (sin detalle)<\/option>'];
-    nameList.slice().sort().forEach(function(n){opts.push('<option value="'+n.replace(/"/g,'&quot;')+'">'+n+'<\/option>');});
-    sel.innerHTML=opts.join('');
-    if(prevVal&&nameList.includes(prevVal)){sel.value=prevVal;renderEvolDetail(prevVal);}
-  }
-  window._evolUsers=users; // cache for detail rendering
 }
 function renderEvolDetail(name){
   var det=document.getElementById('evol-detail');if(!det)return;
