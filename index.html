@@ -810,24 +810,32 @@ async function renderRanking(){
   var h='<div class="rank-banner"><div class="pi"><div class="pilbl">Participantes<\/div><div class="pival" style="color:var(--text)">'+n+'<\/div><\/div><div class="pi"><div class="pilbl">Pozo<\/div><div class="pival" style="color:var(--gold)">'+CUR+total.toFixed(0)+'<\/div><\/div><div class="pi"><div class="pilbl">1er Lugar<\/div><div class="pival" style="color:var(--gold)">'+CUR+prizes.first.toFixed(0)+'<\/div><\/div><div class="pi"><div class="pilbl">2do Lugar<\/div><div class="pival" style="color:#9aa0aa">'+CUR+prizes.second.toFixed(0)+'<\/div><\/div><div class="pi"><div class="pilbl">3er Lugar<\/div><div class="pival" style="color:#a07040">'+CUR+prizes.third.toFixed(0)+'<\/div><\/div><div class="pi"><div class="pilbl">4to Lugar<\/div><div class="pival" style="color:var(--muted)">Recupera '+CUR+FEE+'<\/div><\/div><\/div>';
   if(!n){cont.innerHTML=h+'<div style="text-align:center;padding:24px;color:var(--muted);">Aun no hay participantes.<\/div>';return;}
 
-  // Vertical bar chart - only top 4 prize positions
-  var top4Rows=rows.filter(function(row){return row.pos<4;});
-  var maxPts=Math.max.apply(null,top4Rows.map(function(row){return row.u.pts;}))||1;
+  // Classic podium: fixed heights (not proportional to points), classic 2-1-3 layout
   var podiumColors=['var(--gold)','#9aa0aa','#a07040','var(--muted)'];
-  h+='<div style="background:var(--panel);border:1px solid var(--border);padding:14px 12px 10px;margin-bottom:12px;display:flex;align-items:flex-end;justify-content:center;gap:10px;min-height:160px;">';
-  top4Rows.forEach(function(row){
-    var u=row.u,pos=row.pos;
-    var pct=Math.max(8,Math.round(u.pts/maxPts*100));
-    var color=podiumColors[pos];
-    var medal=['🥇','🥈','🥉','4'][pos];
-    h+='<div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;max-width:90px;">';
-    h+='<span style="font-family:\'Bebas Neue\',sans-serif;font-size:18px;color:'+color+';">'+u.pts+'<\/span>';
-    h+='<div style="width:100%;max-width:48px;background:#1a2030;height:110px;display:flex;align-items:flex-end;"><div style="width:100%;height:'+pct+'%;background:'+color+';"><\/div><\/div>';
-    h+='<span style="font-size:13px;">'+medal+'<\/span>';
-    h+='<span style="font-size:10px;font-weight:700;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:88px;">'+u.name+'<\/span>';
+  var podiumHeights=[120,90,65]; // 1st, 2nd, 3rd fixed heights
+  var medals=['🥇','🥈','🥉'];
+  var rowsByPos=[0,1,2].map(function(p){return rows.filter(function(r){return r.pos===p;});});
+  var rank4=rows.filter(function(r){return r.pos===3;});
+  h+='<div style="background:var(--panel);border:1px solid var(--border);padding:14px 12px 10px;margin-bottom:12px;display:flex;align-items:flex-end;justify-content:center;gap:14px;">';
+  // Classic order: 2nd, 1st, 3rd
+  [1,0,2].forEach(function(p){
+    var members=rowsByPos[p];
+    if(!members.length){h+='<div style="flex:1;max-width:110px;"><\/div>';return;}
+    var color=podiumColors[p];
+    var ht=podiumHeights[p];
+    h+='<div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;max-width:110px;">';
+    h+='<div style="font-size:'+(p===0?'20':'15')+'px;">'+medals[p]+'<\/div>';
+    var namesH=members.map(function(m){return'<div style="font-size:10px;font-weight:700;text-align:center;line-height:1.25;">'+m.u.name+'<\/div>';}).join('');
+    h+='<div style="width:100%;max-width:96px;background:'+color+';height:'+ht+'px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px;gap:2px;color:var(--dark);">'+namesH+'<div style="font-family:\'Bebas Neue\',sans-serif;font-size:15px;margin-top:2px;">'+members[0].u.pts+'pts<\/div><\/div>';
     h+='<\/div>';
   });
   h+='<\/div>';
+  if(rank4.length){
+    h+='<div style="background:var(--panel);border:1px solid var(--border);padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
+    h+='<span style="font-family:\'Bebas Neue\',sans-serif;font-size:14px;color:var(--muted);">4TO<\/span>';
+    rank4.forEach(function(r){h+='<span style="font-size:11px;font-weight:700;background:#1a2030;padding:3px 8px;">'+r.u.name+' &middot; '+r.u.pts+'pts<\/span>';});
+    h+='<\/div>';
+  }
 
   h+='<table class="rtbl"><thead><tr><th>Pos<\/th><th>Participante<\/th><th class="rr">Grupos<\/th><th class="rr">Eliminatorias<\/th><th class="rr">Total<\/th><th class="rr">Premio<\/th><\/tr><\/thead><tbody>';
   var medals=['🥇','🥈','🥉','4'];
