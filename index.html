@@ -136,6 +136,15 @@ h1 span{color:var(--gold);}
 .evol-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;max-width:1100px;}
 .evol-leg-item{display:flex;align-items:center;gap:5px;font-size:11px;}
 .evol-leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
+.evol-stat-banner{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:9px;background:var(--panel);border:1px solid var(--border);padding:11px 14px;margin:10px 0;}
+.evol-match{display:flex;align-items:center;padding:7px 10px;border-bottom:1px solid #1a2030;gap:6px;font-size:12px;}
+.evol-match:last-child{border-bottom:none;}
+.evol-match.hit{background:#0a1208;}
+.evol-match.miss{background:#1a0a08;}
+.evol-mt{flex:1;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.evol-msc{font-family:'Bebas Neue',sans-serif;font-size:15px;padding:0 6px;min-width:60px;text-align:center;}
+.evol-mpts{font-weight:700;min-width:36px;text-align:right;}
+.evol-msec-title{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:var(--gold);margin:14px 0 4px;}
 </style>
 </head>
 <body>
@@ -199,8 +208,15 @@ h1 span{color:var(--gold);}
   </div>
   <div id="tab-evol" class="view">
     <div style="max-width:1100px;margin:0 auto;padding:10px 0;">
-      <div class="ibox">Evolucion de puntos totales de cada participante por dia. El admin guarda un snapshot diario desde su panel.</div>
+      <div class="ibox">Evolucion de puntos totales de cada participante por dia, calculada automaticamente segun las fechas de los partidos.</div>
       <div id="evol-cont"><div style="text-align:center;padding:20px;color:var(--muted);">Cargando...</div></div>
+      <div style="margin-top:14px;">
+        <label class="ll">Filtrar participante</label>
+        <select id="evol-filter" class="li" style="margin-bottom:10px;" onchange="renderEvolDetail(this.value)">
+          <option value="">Todos (sin detalle)</option>
+        </select>
+      </div>
+      <div id="evol-detail"></div>
     </div>
   </div>
   <div id="tab-admin" class="view">
@@ -868,6 +884,93 @@ async function renderEvol(){
   });
   legend+='<\/div>';
   cont.innerHTML=svg+legend;
+
+  // Populate filter dropdown
+  var sel=document.getElementById('evol-filter');
+  if(sel){
+    var prevVal=sel.value;
+    var opts=['<option value="">Todos (sin detalle)<\/option>'];
+    nameList.slice().sort().forEach(function(n){opts.push('<option value="'+n.replace(/"/g,'&quot;')+'">'+n+'<\/option>');});
+    sel.innerHTML=opts.join('');
+    if(prevVal&&nameList.includes(prevVal)){sel.value=prevVal;renderEvolDetail(prevVal);}
+  }
+  window._evolUsers=users; // cache for detail rendering
+}
+function renderEvolDetail(name){
+  var det=document.getElementById('evol-detail');if(!det)return;
+  if(!name){det.innerHTML='';return;}
+  var users=window._evolUsers||[];
+  var u=users.find(function(x){return x.name===name;});
+  if(!u){det.innerHTML='';return;}
+  var grHits=0,grMiss=0,koHits=0,koMiss=0,grPtsTotal=0,koPtsTotal=0;
+  var grRows=[],koRows=[];
+  // Grupos
+  GS.forEach(function(g){
+    MU.forEach(function(p,mi){
+      var pred=u.scores&&u.scores[g]?u.scores[g][mi]:null;
+      var real=rr.gr&&rr.gr[g]?rr.gr[g][mi]:null;
+      if(!real||real.h===null||real.a===null)return; // not played yet
+      var hn=TEAMS[g][p[0]].n,an=TEAMS[g][p[1]].n;
+      var hf=TEAMS[g][p[0]].f,af=TEAMS[g][p[1]].f;
+      if(!pred||pred.h===null||pred.a===null){
+        grRows.push({h:hn,hf:hf,a:an,af:af,pred:'Sin prediccion',real:real.h+'-'+real.a,pts:0,hit:false});
+        grMiss++;return;
+      }
+      var predW=pred.h>pred.a?'h':pred.a>pred.h?'a':'d';
+      var realW=real.h>real.a?'h':real.a>real.h?'a':'d';
+      var pts=0,won=false;
+      if(predW===realW){pts+=GR_PTS_WIN;won=true;}
+      if(pred.h===real.h&&pred.a===real.a)pts+=GR_PTS_EXACT;
+      grPtsTotal+=pts;
+      if(won)grHits++;else grMiss++;
+      grRows.push({h:hn,hf:hf,a:an,af:af,pred:pred.h+'-'+pred.a,real:real.h+'-'+real.a,pts:pts,hit:won});
+    });
+  });
+  // Eliminatorias
+  KO_ROUNDS.forEach(function(r){
+    var ph=phases[r];if(!ph||!ph.open)return;
+    var teams=ph.teams||[];
+    var n=KO_SIZES[r];
+    for(var i=0;i<n;i++){
+      var real=rr.ko&&rr.ko[r]?rr.ko[r][i]:null;
+      if(!real||real.h===null||real.a===null)continue;
+      var hn=teams[i*2]||'?',an=teams[i*2+1]||'?';
+      var hf=getFlagByName(hn),af=getFlagByName(an);
+      var pred=u.koSc&&u.koSc[r]?u.koSc[r][i]:null;
+      if(!pred||pred.h===null||pred.a===null){
+        koRows.push({rnd:KO_NAMES[r],h:hn,hf:hf,a:an,af:af,pred:'Sin prediccion',real:real.h+'-'+real.a,pts:0,hit:false});
+        koMiss++;continue;
+      }
+      var predW=pred.h>pred.a?'h':pred.a>pred.h?'a':'draw';
+      var realW=real.h>real.a?'h':real.a>real.h?'a':'draw';
+      var pts=0,won=false;
+      if(predW===realW){pts+=KO_PTS_WIN;won=true;}
+      if(pred.h===real.h&&pred.a===real.a)pts+=KO_PTS_EXACT;
+      koPtsTotal+=pts;
+      if(won)koHits++;else koMiss++;
+      koRows.push({rnd:KO_NAMES[r],h:hn,hf:hf,a:an,af:af,pred:pred.h+'-'+pred.a,real:real.h+'-'+real.a,pts:pts,hit:won});
+    }
+  });
+  var h='<div class="evol-stat-banner">';
+  h+='<div class="pi"><div class="pilbl">Aciertos Grupos<\/div><div class="pival" style="color:#2a8a4c">'+grHits+'\/'+(grHits+grMiss)+'<\/div><\/div>';
+  h+='<div class="pi"><div class="pilbl">Pts Grupos<\/div><div class="pival" style="color:var(--gold)">'+grPtsTotal+'<\/div><\/div>';
+  h+='<div class="pi"><div class="pilbl">Aciertos Elim.<\/div><div class="pival" style="color:#2a8a4c">'+koHits+'\/'+(koHits+koMiss)+'<\/div><\/div>';
+  h+='<div class="pi"><div class="pilbl">Pts Elim.<\/div><div class="pival" style="color:var(--gold)">'+koPtsTotal+'<\/div><\/div>';
+  h+='<\/div>';
+  if(grRows.length){
+    h+='<div class="evol-msec-title">Grupos<\/div>';
+    grRows.forEach(function(row){
+      h+='<div class="evol-match '+(row.hit?'hit':'miss')+'"><span class="evol-mt">'+row.hf+' '+row.h+'<\/span><span class="evol-msc" style="color:var(--muted);">Pred: '+row.pred+'<\/span><span class="evol-msc" style="color:var(--gold);">Real: '+row.real+'<\/span><span class="evol-mt" style="text-align:right;">'+row.a+' '+row.af+'<\/span><span class="evol-mpts" style="color:'+(row.pts>0?'#2a8a4c':'var(--muted)')+'">+'+row.pts+'<\/span><\/div>';
+    });
+  }
+  if(koRows.length){
+    h+='<div class="evol-msec-title">Eliminatorias<\/div>';
+    koRows.forEach(function(row){
+      h+='<div class="evol-match '+(row.hit?'hit':'miss')+'"><span style="font-size:9px;color:var(--muted);min-width:60px;">'+row.rnd+'<\/span><span class="evol-mt">'+row.hf+' '+row.h+'<\/span><span class="evol-msc" style="color:var(--muted);">Pred: '+row.pred+'<\/span><span class="evol-msc" style="color:var(--gold);">Real: '+row.real+'<\/span><span class="evol-mt" style="text-align:right;">'+row.a+' '+row.af+'<\/span><span class="evol-mpts" style="color:'+(row.pts>0?'#2a8a4c':'var(--muted)')+'">+'+row.pts+'<\/span><\/div>';
+    });
+  }
+  if(!grRows.length&&!koRows.length)h+='<div style="text-align:center;padding:16px;color:var(--muted);">Aun no hay partidos con resultado real.<\/div>';
+  det.innerHTML=h;
 }
 
 // ── ADMIN ─────────────────────────────────────
