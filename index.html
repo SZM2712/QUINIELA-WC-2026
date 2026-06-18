@@ -2075,7 +2075,7 @@ async function renderPosiciones(){
     if(!thirdMapping)return null;
     var srcGroup=thirdMapping[winnerGroup];
     var t=standings[srcGroup]&&standings[srcGroup][2];
-    return t?{n:t.n,f:t.f}:null;
+    return t?{name:t.n,flag:t.f}:null;
   }
 
   var r32=[
@@ -2100,8 +2100,8 @@ async function renderPosiciones(){
   h+='<div class="ibox" style="font-size:11px;">Los cruces marcados "3ro [grupos]" dependen de los 8 mejores terceros lugares y solo se confirman cuando terminen los 72 partidos de grupo.<\/div>';
   if(isProjection){
     h+='<div class="ibox" style="font-size:11px;background:#1a1500;border-color:#3a2f10;">&#128302; Los cruces con tercer lugar mostrados abajo son una PROYECCION basada en como van ahora los 8 mejores terceros. Pueden cambiar hasta que terminen los 72 partidos de grupo.<\/div>';
-  }else if(!thirdMapping){
-    h+='<div class="ibox" style="font-size:11px;">DEBUG: top8Groups=['+top8Groups.join(',')+'] len='+top8Groups.length+' qkey='+(top8Groups.length===8?top8Groups.slice().sort().join(''):'N\/A')+' R32_SCENARIOS.length='+(typeof R32_SCENARIOS!=='undefined'?R32_SCENARIOS.length:'UNDEFINED')+'<\/div>';
+  }else if(!thirdMapping&&top8Groups.length<8){
+    h+='<div class="ibox" style="font-size:11px;">Para proyectar los cruces con tercer lugar se necesitan los 8 mejores terceros definidos. Actualmente: '+top8Groups.length+' de 8.<\/div>';
   }
   r32.forEach(function(m){
     var aReady=!!m.a.name,bReady=!!m.b.name;
