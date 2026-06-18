@@ -2100,6 +2100,8 @@ async function renderPosiciones(){
   h+='<div class="ibox" style="font-size:11px;">Los cruces marcados "3ro [grupos]" dependen de los 8 mejores terceros lugares y solo se confirman cuando terminen los 72 partidos de grupo.<\/div>';
   if(isProjection){
     h+='<div class="ibox" style="font-size:11px;background:#1a1500;border-color:#3a2f10;">&#128302; Los cruces con tercer lugar mostrados abajo son una PROYECCION basada en como van ahora los 8 mejores terceros. Pueden cambiar hasta que terminen los 72 partidos de grupo.<\/div>';
+  }else if(!thirdMapping){
+    h+='<div class="ibox" style="font-size:11px;">Para proyectar los cruces con tercer lugar se necesitan al menos '+thirds.length+'\/8 grupos con un tercer lugar definido (cada grupo necesita resultados cargados). Actualmente: '+thirds.length+' de 12 grupos tienen datos suficientes.<\/div>';
   }
   r32.forEach(function(m){
     var aReady=!!m.a.name,bReady=!!m.b.name;
