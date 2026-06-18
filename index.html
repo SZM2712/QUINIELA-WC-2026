@@ -906,11 +906,12 @@ function drawEvolChart(){
   var colors=evolColors();
   var selected=window._evolSelected||{};
   var anySelected=Object.values(selected).some(function(v){return v;});
-  var activeNames=anySelected?nameList.filter(function(n){return selected[n];}):nameList;
+  var strongNames=anySelected?nameList.filter(function(n){return selected[n];}):nameList;
+  var dimNames=anySelected?nameList.filter(function(n){return !selected[n];}):[];
 
   var W=1000,H=480,padL=46,padR=16,padT=24,padB=44;
   var maxPts=1;
-  dates.forEach(function(d){activeNames.forEach(function(n){var v=hist[d][n];if(v!==undefined&&v>maxPts)maxPts=v;});});
+  dates.forEach(function(d){nameList.forEach(function(n){var v=hist[d][n];if(v!==undefined&&v>maxPts)maxPts=v;});});
   maxPts=Math.ceil(maxPts*1.12)||1;
   function xPos(i){return padL+(dates.length>1?i/(dates.length-1):0)*(W-padL-padR);}
   function yPos(v){return H-padB-(v/maxPts)*(H-padT-padB);}
@@ -935,7 +936,14 @@ function drawEvolChart(){
     var lbl=d.slice(5).replace('-','\/');
     svg+='<text x="'+xPos(i)+'" y="'+(H-padB+20)+'" fill="#8a93a3" font-size="11" text-anchor="middle">'+lbl+'<\/text>';
   });
-  activeNames.forEach(function(name){
+  // Dim (background) lines first, behind the strong ones
+  dimNames.forEach(function(name){
+    var ni=nameList.indexOf(name),color=colors[ni%colors.length];
+    var pts=dates.map(function(d,i){return[xPos(i),yPos(hist[d][name])];});
+    svg+='<path d="'+smoothPath(pts)+'" fill="none" stroke="'+color+'" stroke-width="1.5" opacity="0.15"/>';
+  });
+  // Strong (selected, or all if none selected) lines on top
+  strongNames.forEach(function(name){
     var ni=nameList.indexOf(name),color=colors[ni%colors.length];
     var pts=dates.map(function(d,i){return[xPos(i),yPos(hist[d][name])];});
     svg+='<path d="'+smoothPath(pts)+'" fill="none" stroke="'+color+'" stroke-width="2.75" opacity="1"/>';
@@ -943,9 +951,9 @@ function drawEvolChart(){
   });
   svg+='<\/svg>';
   var lastDate=dates[dates.length-1];
-  var rankedActive=activeNames.map(function(n){return{n:n,pts:hist[lastDate][n]};}).sort(function(a,b){return b.pts-a.pts;});
+  var rankedStrong=strongNames.map(function(n){return{n:n,pts:hist[lastDate][n]};}).sort(function(a,b){return b.pts-a.pts;});
   var legend='<div class="evol-legend">';
-  rankedActive.forEach(function(u){
+  rankedStrong.forEach(function(u){
     var ni=nameList.indexOf(u.n),color=colors[ni%colors.length];
     legend+='<div class="evol-leg-item"><span class="evol-leg-dot" style="background:'+color+'"><\/span>'+u.n+' ('+u.pts+'pts)<\/div>';
   });
