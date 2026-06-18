@@ -133,6 +133,10 @@ h1 span{color:var(--gold);}
 .ubkt-ko-m{font-size:10px;padding:1px 0;display:flex;align-items:center;gap:3px;}
 .ubkt-ko-w{color:var(--gold);font-weight:700;}
 .evol-svg{width:100%;height:auto;background:var(--panel);border:1px solid var(--border);}
+.evol-chip{padding:5px 11px;font-size:11px;font-weight:700;font-family:'Barlow Condensed',sans-serif;letter-spacing:1px;border:1.5px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;border-radius:14px;display:flex;align-items:center;gap:5px;}
+.evol-chip-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.evol-chip.on{background:#1a2030;color:var(--text);}
+.evol-chip.top4{font-weight:700;}
 .evol-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;max-width:1100px;}
 .evol-leg-item{display:flex;align-items:center;gap:5px;font-size:11px;}
 .evol-leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
@@ -208,12 +212,14 @@ h1 span{color:var(--gold);}
   </div>
   <div id="tab-evol" class="view">
     <div style="max-width:1100px;margin:0 auto;padding:10px 0;">
-      <div class="ibox">Evolucion de puntos totales de cada participante por dia, calculada automaticamente segun las fechas de los partidos.</div>
+      <div class="ibox">Evolucion de puntos totales por dia. Los 4 primeros lugares siempre se resaltan; toca chips para agregar o quitar participantes.</div>
       <div id="evol-cont"><div style="text-align:center;padding:20px;color:var(--muted);">Cargando...</div></div>
       <div style="margin-top:14px;">
-        <label class="ll">Filtrar participante</label>
-        <select id="evol-filter" class="li" style="margin-bottom:10px;" onchange="drawEvolChart(this.value);renderEvolDetail(this.value)">
-          <option value="">Todos (sin detalle)</option>
+        <label class="ll">Agregar participantes a la grafica</label>
+        <div id="evol-chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px;"></div>
+        <label class="ll">Ver detalle partido por partido</label>
+        <select id="evol-detail-select" class="li" style="margin-bottom:10px;" onchange="renderEvolDetail(this.value)">
+          <option value="">Elegir participante...</option>
         </select>
       </div>
       <div id="evol-detail"></div>
@@ -854,60 +860,131 @@ async function renderEvol(){
   window._evolHist=hist;
   window._evolDates=dates;
   window._evolNames=nameList;
+  if(!window._evolSelected)window._evolSelected={};
 
-  drawEvolChart('');
+  // Determine current top 4 by latest cumulative points (these are always shown)
+  var lastDate=dates[dates.length-1];
+  var ranked=nameList.map(function(n){return{n:n,pts:hist[lastDate][n]};}).sort(function(a,b){return b.pts-a.pts;});
+  window._evolTop4=ranked.slice(0,4).map(function(r){return r.n;});
 
-  // Populate filter dropdown
-  var sel=document.getElementById('evol-filter');
-  if(sel){
-    var prevVal=sel.value;
-    var opts=['<option value="">Todos<\/option>'];
-    nameList.slice().sort().forEach(function(n){opts.push('<option value="'+n.replace(/"/g,'&quot;')+'">'+n+'<\/option>');});
-    sel.innerHTML=opts.join('');
-    if(prevVal&&nameList.includes(prevVal)){sel.value=prevVal;drawEvolChart(prevVal);renderEvolDetail(prevVal);}
+  drawEvolChart();
+
+  // Populate chip selector (everyone not in top4 can be toggled on/off)
+  var chipsEl=document.getElementById('evol-chips');
+  if(chipsEl){
+    var colors=evolColors();
+    var html='';
+    nameList.slice().sort().forEach(function(n){
+      var ni=nameList.indexOf(n);
+      var color=colors[ni%colors.length];
+      var isTop4=window._evolTop4.includes(n);
+      var isOn=isTop4||window._evolSelected[n];
+      html+='<button class="evol-chip'+(isOn?' on':'')+(isTop4?' top4':'')+'" '+(isTop4?'disabled':'')+' onclick="toggleEvolChip(\''+n.replace(/'/g,"\\'")+'\')"><span class="evol-chip-dot" style="background:'+color+'"><\/span>'+n+(isTop4?' (Top4)':'')+'<\/button>';
+    });
+    chipsEl.innerHTML=html;
+  }
+  var detSel=document.getElementById('evol-detail-select');
+  if(detSel){
+    var prevDetVal=detSel.value;
+    var detOpts=['<option value="">Elegir participante...<\/option>'];
+    nameList.slice().sort().forEach(function(n){detOpts.push('<option value="'+n.replace(/"/g,'&quot;')+'">'+n+'<\/option>');});
+    detSel.innerHTML=detOpts.join('');
+    if(prevDetVal&&nameList.includes(prevDetVal)){detSel.value=prevDetVal;renderEvolDetail(prevDetVal);}
   }
 }
-function drawEvolChart(filterName){
+function toggleEvolChip(name){
+  if(window._evolTop4&&window._evolTop4.includes(name))return; // top4 always on
+  window._evolSelected=window._evolSelected||{};
+  window._evolSelected[name]=!window._evolSelected[name];
+  renderEvol(); // rebuild chips + chart (data already cached, loadRR will just refetch lightly)
+}
+function evolColors(){return['#D4AF37','#5fd38d','#6a9aff','#ff6b5f','#c98aff','#ffb347','#3fd4d4','#ff7ab8','#9fe85a','#b8c0cc','#ff9d6a','#7a8aff'];}
+function drawEvolChart(){
   var cont=document.getElementById('evol-cont');if(!cont)return;
   var hist=window._evolHist,dates=window._evolDates,nameList=window._evolNames;
-  if(!hist||!dates){return;}
-  var colors=['#D4AF37','#4a9a6a','#4a6a9a','#c0392b','#9a7ab0','#c07820','#2a8a8a','#a04090','#6a9a30','#9aa0aa','#e07050','#5050e0'];
-  var W=1000,H=420,padL=40,padR=20,padT=20,padB=40;
-  var activeNames=filterName?[filterName]:nameList;
+  if(!hist||!dates)return;
+  var colors=evolColors();
+  var top4=window._evolTop4||[];
+  var selected=window._evolSelected||{};
+  var activeNames=nameList.filter(function(n){return top4.includes(n)||selected[n];});
+  var dimNames=nameList.filter(function(n){return !activeNames.includes(n);});
+
+  var W=1000,H=480,padL=46,padR=16,padT=24,padB=44;
   var maxPts=1;
-  dates.forEach(function(d){activeNames.forEach(function(n){var v=hist[d][n];if(v!==undefined&&v>maxPts)maxPts=v;});});
-  maxPts=Math.ceil(maxPts*1.15)||1;
+  dates.forEach(function(d){nameList.forEach(function(n){var v=hist[d][n];if(v!==undefined&&v>maxPts)maxPts=v;});});
+  maxPts=Math.ceil(maxPts*1.12)||1;
   function xPos(i){return padL+(dates.length>1?i/(dates.length-1):0)*(W-padL-padR);}
   function yPos(v){return H-padB-(v/maxPts)*(H-padT-padB);}
+  function smoothPath(pts){
+    if(pts.length<2)return'';
+    var d='M'+pts[0][0]+','+pts[0][1];
+    for(var i=0;i<pts.length-1;i++){
+      var p0=pts[i],p1=pts[i+1];
+      var mx=(p0[0]+p1[0])/2;
+      d+=' C'+mx+','+p0[1]+' '+mx+','+p1[1]+' '+p1[0]+','+p1[1];
+    }
+    return d;
+  }
   var svg='<svg class="evol-svg" viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg">';
   for(var gl=0;gl<=4;gl++){
     var gv=Math.round(maxPts*gl/4),gy=yPos(gv);
-    svg+='<line x1="'+padL+'" y1="'+gy+'" x2="'+(W-padR)+'" y2="'+gy+'" stroke="#2a3040" stroke-width="1"/>';
-    svg+='<text x="'+(padL-8)+'" y="'+(gy+4)+'" fill="#6a7585" font-size="11" text-anchor="end">'+gv+'<\/text>';
+    svg+='<line x1="'+padL+'" y1="'+gy+'" x2="'+(W-padR)+'" y2="'+gy+'" stroke="#1f2530" stroke-width="1"/>';
+    svg+='<text x="'+(padL-9)+'" y="'+(gy+5)+'" fill="#8a93a3" font-size="13" text-anchor="end">'+gv+'<\/text>';
   }
   dates.forEach(function(d,i){
-    if(dates.length>12&&i%Math.ceil(dates.length/12)!==0&&i!==dates.length-1)return;
+    if(dates.length>10&&i%Math.ceil(dates.length/10)!==0&&i!==dates.length-1)return;
     var lbl=d.slice(5).replace('-','\/');
-    svg+='<text x="'+xPos(i)+'" y="'+(H-padB+16)+'" fill="#6a7585" font-size="9" text-anchor="middle">'+lbl+'<\/text>';
+    svg+='<text x="'+xPos(i)+'" y="'+(H-padB+20)+'" fill="#8a93a3" font-size="11" text-anchor="middle">'+lbl+'<\/text>';
   });
+  // Dim (background) lines first
+  dimNames.forEach(function(name){
+    var ni=nameList.indexOf(name),color=colors[ni%colors.length];
+    var pts=dates.map(function(d,i){return[xPos(i),yPos(hist[d][name])];});
+    svg+='<path d="'+smoothPath(pts)+'" fill="none" stroke="'+color+'" stroke-width="1.5" opacity="0.18"/>';
+  });
+  // Active (highlighted) lines on top
   activeNames.forEach(function(name){
-    var ni=nameList.indexOf(name);
-    var color=colors[ni%colors.length];
-    var pts=[];
-    dates.forEach(function(d,i){pts.push(xPos(i)+','+yPos(hist[d][name]));});
-    svg+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="'+color+'" stroke-width="2.5" opacity="0.9"/>';
-    dates.forEach(function(d,i){svg+='<circle cx="'+xPos(i)+'" cy="'+yPos(hist[d][name])+'" r="3" fill="'+color+'"/>';});
+    var ni=nameList.indexOf(name),color=colors[ni%colors.length];
+    var pts=dates.map(function(d,i){return[xPos(i),yPos(hist[d][name])];});
+    var isTop4=top4.includes(name);
+    svg+='<path d="'+smoothPath(pts)+'" fill="none" stroke="'+color+'" stroke-width="'+(isTop4?'3.5':'2.5')+'" opacity="1"/>';
+    pts.forEach(function(p){svg+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="'+(isTop4?'3.5':'3')+'" fill="'+color+'" stroke="#0a0a0a" stroke-width="1"/>';});
   });
   svg+='<\/svg>';
   var lastDate=dates[dates.length-1];
-  var ranked=activeNames.map(function(n){return{n:n,pts:hist[lastDate][n]};}).sort(function(a,b){return b.pts-a.pts;});
+  var rankedActive=activeNames.map(function(n){return{n:n,pts:hist[lastDate][n]};}).sort(function(a,b){return b.pts-a.pts;});
   var legend='<div class="evol-legend">';
-  ranked.forEach(function(u){
+  rankedActive.forEach(function(u){
     var ni=nameList.indexOf(u.n),color=colors[ni%colors.length];
-    legend+='<div class="evol-leg-item"><span class="evol-leg-dot" style="background:'+color+'"><\/span>'+u.n+' ('+u.pts+'pts)<\/div>';
+    var medal=top4.indexOf(u.n);
+    var tag=medal===0?'🥇 ':medal===1?'🥈 ':medal===2?'🥉 ':medal===3?'4o ':'';
+    legend+='<div class="evol-leg-item"><span class="evol-leg-dot" style="background:'+color+'"><\/span>'+tag+u.n+' ('+u.pts+'pts)<\/div>';
   });
   legend+='<\/div>';
   cont.innerHTML=svg+legend;
+}
+function calcWinProbabilities(){
+  var users=window._evolUsers||[];
+  if(!users.length)return{};
+  // Total matches expected: 72 group + sum of KO sizes for rounds that are open/will be played
+  var totalMatches=72;
+  KO_ROUNDS.forEach(function(r){totalMatches+=KO_SIZES[r];});
+  var stats=users.map(function(u){
+    var r=calcUserPoints(u,rr);
+    var played=0;
+    GS.forEach(function(g){MU.forEach(function(p,mi){var real=rr.gr&&rr.gr[g]?rr.gr[g][mi]:null;if(real&&real.h!==null&&real.a!==null)played++;});});
+    KO_ROUNDS.forEach(function(rnd){var n=KO_SIZES[rnd];for(var i=0;i<n;i++){var real=rr.ko&&rr.ko[rnd]?rr.ko[rnd][i]:null;if(real&&real.h!==null&&real.a!==null)played++;}});
+    var rate=played>0?r.total/played:0;
+    var projected=r.total+rate*(totalMatches-played);
+    return{name:u.name,projected:projected};
+  });
+  // Convert projected scores into relative win probability via softmax-like weighting
+  var maxProj=Math.max.apply(null,stats.map(function(s){return s.projected;}));
+  var weights=stats.map(function(s){return Math.exp((s.projected-maxProj)*0.35);});
+  var sumW=weights.reduce(function(a,b){return a+b;},0);
+  var probs={};
+  stats.forEach(function(s,i){probs[s.name]=sumW>0?(weights[i]/sumW*100):0;});
+  return probs;
 }
 function renderEvolDetail(name){
   var det=document.getElementById('evol-detail');if(!det)return;
@@ -915,7 +992,7 @@ function renderEvolDetail(name){
   var users=window._evolUsers||[];
   var u=users.find(function(x){return x.name===name;});
   if(!u){det.innerHTML='';return;}
-  var grHits=0,grMiss=0,koHits=0,koMiss=0,grPtsTotal=0,koPtsTotal=0;
+  var grHits=0,grMiss=0,koHits=0,koMiss=0,grPtsTotal=0,koPtsTotal=0,grExact=0,koExact=0;
   var grRows=[],koRows=[];
   // Grupos
   GS.forEach(function(g){
@@ -926,17 +1003,17 @@ function renderEvolDetail(name){
       var hn=TEAMS[g][p[0]].n,an=TEAMS[g][p[1]].n;
       var hf=TEAMS[g][p[0]].f,af=TEAMS[g][p[1]].f;
       if(!pred||pred.h===null||pred.a===null){
-        grRows.push({h:hn,hf:hf,a:an,af:af,pred:'Sin prediccion',real:real.h+'-'+real.a,pts:0,hit:false});
+        grRows.push({h:hn,hf:hf,a:an,af:af,pred:'Sin prediccion',real:real.h+'-'+real.a,pts:0,hit:false,exact:false});
         grMiss++;return;
       }
       var predW=pred.h>pred.a?'h':pred.a>pred.h?'a':'d';
       var realW=real.h>real.a?'h':real.a>real.h?'a':'d';
-      var pts=0,won=false;
+      var pts=0,won=false,exact=false;
       if(predW===realW){pts+=GR_PTS_WIN;won=true;}
-      if(pred.h===real.h&&pred.a===real.a)pts+=GR_PTS_EXACT;
+      if(pred.h===real.h&&pred.a===real.a){pts+=GR_PTS_EXACT;exact=true;grExact++;}
       grPtsTotal+=pts;
       if(won)grHits++;else grMiss++;
-      grRows.push({h:hn,hf:hf,a:an,af:af,pred:pred.h+'-'+pred.a,real:real.h+'-'+real.a,pts:pts,hit:won});
+      grRows.push({h:hn,hf:hf,a:an,af:af,pred:pred.h+'-'+pred.a,real:real.h+'-'+real.a,pts:pts,hit:won,exact:exact});
     });
   });
   // Eliminatorias
@@ -951,35 +1028,40 @@ function renderEvolDetail(name){
       var hf=getFlagByName(hn),af=getFlagByName(an);
       var pred=u.koSc&&u.koSc[r]?u.koSc[r][i]:null;
       if(!pred||pred.h===null||pred.a===null){
-        koRows.push({rnd:KO_NAMES[r],h:hn,hf:hf,a:an,af:af,pred:'Sin prediccion',real:real.h+'-'+real.a,pts:0,hit:false});
+        koRows.push({rnd:KO_NAMES[r],h:hn,hf:hf,a:an,af:af,pred:'Sin prediccion',real:real.h+'-'+real.a,pts:0,hit:false,exact:false});
         koMiss++;continue;
       }
       var predW=pred.h>pred.a?'h':pred.a>pred.h?'a':'draw';
       var realW=real.h>real.a?'h':real.a>real.h?'a':'draw';
-      var pts=0,won=false;
+      var pts=0,won=false,exact=false;
       if(predW===realW){pts+=KO_PTS_WIN;won=true;}
-      if(pred.h===real.h&&pred.a===real.a)pts+=KO_PTS_EXACT;
+      if(pred.h===real.h&&pred.a===real.a){pts+=KO_PTS_EXACT;exact=true;koExact++;}
       koPtsTotal+=pts;
       if(won)koHits++;else koMiss++;
-      koRows.push({rnd:KO_NAMES[r],h:hn,hf:hf,a:an,af:af,pred:pred.h+'-'+pred.a,real:real.h+'-'+real.a,pts:pts,hit:won});
+      koRows.push({rnd:KO_NAMES[r],h:hn,hf:hf,a:an,af:af,pred:pred.h+'-'+pred.a,real:real.h+'-'+real.a,pts:pts,hit:won,exact:exact});
     }
   });
+  var probs=calcWinProbabilities();
+  var myProb=probs[name]||0;
   var h='<div class="evol-stat-banner">';
+  h+='<div class="pi"><div class="pilbl">Prob. de Ganar<\/div><div class="pival" style="color:var(--gold)">'+myProb.toFixed(1)+'%<\/div><\/div>';
   h+='<div class="pi"><div class="pilbl">Aciertos Grupos<\/div><div class="pival" style="color:#2a8a4c">'+grHits+'\/'+(grHits+grMiss)+'<\/div><\/div>';
+  h+='<div class="pi"><div class="pilbl">Marc. Exactos Gr.<\/div><div class="pival" style="color:#c07820">'+grExact+'<\/div><\/div>';
   h+='<div class="pi"><div class="pilbl">Pts Grupos<\/div><div class="pival" style="color:var(--gold)">'+grPtsTotal+'<\/div><\/div>';
   h+='<div class="pi"><div class="pilbl">Aciertos Elim.<\/div><div class="pival" style="color:#2a8a4c">'+koHits+'\/'+(koHits+koMiss)+'<\/div><\/div>';
+  h+='<div class="pi"><div class="pilbl">Marc. Exactos Elim.<\/div><div class="pival" style="color:#c07820">'+koExact+'<\/div><\/div>';
   h+='<div class="pi"><div class="pilbl">Pts Elim.<\/div><div class="pival" style="color:var(--gold)">'+koPtsTotal+'<\/div><\/div>';
   h+='<\/div>';
   if(grRows.length){
     h+='<div class="evol-msec-title">Grupos<\/div>';
     grRows.forEach(function(row){
-      h+='<div class="evol-match '+(row.hit?'hit':'miss')+'"><span class="evol-mt">'+row.hf+' '+row.h+'<\/span><span class="evol-msc" style="color:var(--muted);">Pred: '+row.pred+'<\/span><span class="evol-msc" style="color:var(--gold);">Real: '+row.real+'<\/span><span class="evol-mt" style="text-align:right;">'+row.a+' '+row.af+'<\/span><span class="evol-mpts" style="color:'+(row.pts>0?'#2a8a4c':'var(--muted)')+'">+'+row.pts+'<\/span><\/div>';
+      h+='<div class="evol-match '+(row.hit?'hit':'miss')+'"><span class="evol-mt">'+row.hf+' '+row.h+'<\/span><span class="evol-msc" style="color:var(--muted);">Pred: '+row.pred+'<\/span><span class="evol-msc" style="color:var(--gold);">Real: '+row.real+'<\/span><span class="evol-mt" style="text-align:right;">'+row.a+' '+row.af+'<\/span>'+(row.exact?'<span style="font-size:8px;color:#c07820;border:1px solid #5a3a10;padding:1px 4px;margin-right:4px;">EXACTO<\/span>':'')+'<span class="evol-mpts" style="color:'+(row.pts>0?'#2a8a4c':'var(--muted)')+'">+'+row.pts+'<\/span><\/div>';
     });
   }
   if(koRows.length){
     h+='<div class="evol-msec-title">Eliminatorias<\/div>';
     koRows.forEach(function(row){
-      h+='<div class="evol-match '+(row.hit?'hit':'miss')+'"><span style="font-size:9px;color:var(--muted);min-width:60px;">'+row.rnd+'<\/span><span class="evol-mt">'+row.hf+' '+row.h+'<\/span><span class="evol-msc" style="color:var(--muted);">Pred: '+row.pred+'<\/span><span class="evol-msc" style="color:var(--gold);">Real: '+row.real+'<\/span><span class="evol-mt" style="text-align:right;">'+row.a+' '+row.af+'<\/span><span class="evol-mpts" style="color:'+(row.pts>0?'#2a8a4c':'var(--muted)')+'">+'+row.pts+'<\/span><\/div>';
+      h+='<div class="evol-match '+(row.hit?'hit':'miss')+'"><span style="font-size:9px;color:var(--muted);min-width:60px;">'+row.rnd+'<\/span><span class="evol-mt">'+row.hf+' '+row.h+'<\/span><span class="evol-msc" style="color:var(--muted);">Pred: '+row.pred+'<\/span><span class="evol-msc" style="color:var(--gold);">Real: '+row.real+'<\/span><span class="evol-mt" style="text-align:right;">'+row.a+' '+row.af+'<\/span>'+(row.exact?'<span style="font-size:8px;color:#c07820;border:1px solid #5a3a10;padding:1px 4px;margin-right:4px;">EXACTO<\/span>':'')+'<span class="evol-mpts" style="color:'+(row.pts>0?'#2a8a4c':'var(--muted)')+'">+'+row.pts+'<\/span><\/div>';
     });
   }
   if(!grRows.length&&!koRows.length)h+='<div style="text-align:center;padding:16px;color:var(--muted);">Aun no hay partidos con resultado real.<\/div>';
