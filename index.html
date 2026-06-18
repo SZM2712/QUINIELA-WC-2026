@@ -149,6 +149,12 @@ h1 span{color:var(--gold);}
 .evol-msc{font-family:'Bebas Neue',sans-serif;font-size:15px;padding:0 6px;min-width:60px;text-align:center;}
 .evol-mpts{font-weight:700;min-width:36px;text-align:right;}
 .evol-msec-title{font-family:'Bebas Neue',sans-serif;font-size:16px;letter-spacing:2px;color:var(--gold);margin:14px 0 4px;}
+#today-banner{max-width:1100px;margin:0 auto 10px;background:linear-gradient(135deg,#1a1500,#0d0d05);border:1px solid #3a2f10;padding:10px 14px;}
+.today-banner-title{font-family:'Bebas Neue',sans-serif;font-size:15px;letter-spacing:2px;color:var(--gold);margin-bottom:7px;display:flex;align-items:center;gap:6px;}
+.today-match{display:flex;align-items:center;padding:5px 0;border-bottom:1px solid #2a2410;gap:8px;font-size:12px;}
+.today-match:last-child{border-bottom:none;}
+.today-mt{flex:1;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.today-msc{font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--gold);padding:0 8px;min-width:54px;text-align:center;}
 </style>
 </head>
 <body>
@@ -187,6 +193,7 @@ h1 span{color:var(--gold);}
     <div id="lk-past" style="display:none;font-size:12px;color:var(--red);">Plazo vencido &mdash; grupos bloqueados</div>
     <div id="lk-ext" style="display:none;font-size:12px;color:#c07820;font-weight:600;">&#9201; Extension activa &mdash; puedes editar</div>
   </div>
+  <div id="today-banner" style="display:none;"></div>
   <div class="tabs">
     <button class="tab active" onclick="showTab('grupos',this)">Grupos</button>
     <button class="tab" onclick="showTab('elim',this)">Eliminatorias</button>
@@ -568,7 +575,7 @@ async function doLogin(){
     document.getElementById('utag').textContent=CU;
     document.getElementById('ls').style.display='none';
     document.getElementById('app').style.display='block';
-    renderAll();applyLk();setTimeout(checkExt,30000);
+    renderAll();applyLk();renderTodayBanner();setTimeout(checkExt,30000);
   }catch(e){ee.textContent='Error: '+e.message;console.error(e);}
   be.textContent='ENTRAR';be.disabled=false;
 }
@@ -1401,6 +1408,27 @@ function showTab(t,btn){
   if(t==='admin')renderAdmin();
 }
 function renderAll(){renderGrupos();renderElim();}
+function renderTodayBanner(){
+  var box=document.getElementById('today-banner');if(!box)return;
+  if(!CU||CU==='__adm__'){box.style.display='none';return;}
+  var matches=getTodayMatches();
+  if(!matches.length){box.style.display='none';return;}
+  var h='<div class="today-banner-title">&#9917; Tus predicciones para hoy<\/div>';
+  matches.forEach(function(match){
+    var g=match.g,pred=null;
+    MU.forEach(function(p,mi){
+      var hn=TEAMS[g][p[0]].n,an=TEAMS[g][p[1]].n;
+      var sc=grSc[g]?grSc[g][mi]:null;
+      if(!sc||sc.h===null||sc.a===null)return;
+      if(hn===match.h&&an===match.a)pred={h:sc.h,a:sc.a};
+      else if(hn===match.a&&an===match.h)pred={h:sc.a,a:sc.h};
+    });
+    var mid=pred?(pred.h+' - '+pred.a):'<span style="color:var(--muted);font-size:11px;">Sin predecir<\/span>';
+    h+='<div class="today-match"><span class="today-mt" style="text-align:right;">'+match.hf+' '+match.h+'<\/span><span class="today-msc">'+mid+'<\/span><span class="today-mt">'+match.a+' '+match.af+'<\/span><\/div>';
+  });
+  box.innerHTML=h;
+  box.style.display='block';
+}
 
 </script>
 </body>
