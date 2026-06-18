@@ -155,6 +155,18 @@ h1 span{color:var(--gold);}
 .today-match:last-child{border-bottom:none;}
 .today-mt{flex:1;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
 .today-msc{font-family:'Bebas Neue',sans-serif;font-size:16px;color:var(--gold);padding:0 8px;min-width:54px;text-align:center;}
+.pos-group-card{background:var(--panel);border:1px solid var(--border);padding:10px 12px;margin-bottom:8px;}
+.pos-group-title{font-family:'Bebas Neue',sans-serif;font-size:14px;letter-spacing:2px;color:var(--gold);margin-bottom:6px;}
+.pos-team-row{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;}
+.pos-team-rank{width:18px;font-family:'Bebas Neue',sans-serif;font-size:14px;color:var(--muted);}
+.pos-team-name{flex:1;font-weight:600;}
+.pos-team-pts{font-size:11px;color:var(--muted);}
+.pos-groups-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:16px;}
+.r32-match{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--border);padding:8px 10px;margin-bottom:6px;font-size:12px;}
+.r32-match.pending{opacity:0.55;}
+.r32-side{flex:1;display:flex;align-items:center;gap:6px;}
+.r32-vs{color:var(--muted);font-size:10px;padding:0 8px;}
+.r32-num{font-size:9px;color:var(--muted);width:20px;}
 </style>
 </head>
 <body>
@@ -199,6 +211,7 @@ h1 span{color:var(--gold);}
     <button class="tab" onclick="showTab('elim',this)">Eliminatorias</button>
     <button class="tab" onclick="showTab('ranking',this)">Ranking</button>
     <button class="tab" onclick="showTab('evol',this)">Evolucion</button>
+    <button class="tab" onclick="showTab('pos',this)">Posiciones</button>
     <button class="tab atab" onclick="showTab('admin',this)">Admin</button>
   </div>
   <div id="tab-grupos" class="view active">
@@ -226,6 +239,12 @@ h1 span{color:var(--gold);}
         <div id="evol-chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px;"></div>
       </div>
       <div id="evol-detail"></div>
+    </div>
+  </div>
+  <div id="tab-pos" class="view">
+    <div style="max-width:1100px;margin:0 auto;padding:10px 0;">
+      <div class="ibox">Posiciones actuales de cada grupo segun resultados reales cargados, y los cruces de Dieciseisavos ya confirmados con esos equipos.</div>
+      <div id="pos-cont"><div style="text-align:center;padding:20px;color:var(--muted);">Cargando...</div></div>
     </div>
   </div>
   <div id="tab-admin" class="view">
@@ -1476,9 +1495,101 @@ function showTab(t,btn){
   if(t==='elim')renderElim();
   if(t==='ranking'){renderRanking();if(window._rankTimer)clearInterval(window._rankTimer);window._rankTimer=setInterval(renderRanking,60000);}
   if(t==='evol')renderEvol();
+  if(t==='pos')renderPosiciones();
   if(t==='admin')renderAdmin();
 }
 function renderAll(){renderGrupos();renderElim();}
+function calcGroupStandings(g){
+  // Returns array of 4 teams with {n,f,pj,pg,pe,pp,gf,gc,dif,pts}, sorted by pts/dif/gf
+  var teams=TEAMS[g];
+  var stats=teams.map(function(t){return{n:t.n,f:t.f,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,dif:0,pts:0};});
+  MU.forEach(function(p,mi){
+    var real=rr.gr&&rr.gr[g]?rr.gr[g][mi]:null;
+    if(!real||real.h===null||real.a===null)return;
+    var hi=p[0],ai=p[1];
+    stats[hi].pj++;stats[ai].pj++;
+    stats[hi].gf+=real.h;stats[hi].gc+=real.a;
+    stats[ai].gf+=real.a;stats[ai].gc+=real.h;
+    if(real.h>real.a){stats[hi].pg++;stats[hi].pts+=3;stats[ai].pp++;}
+    else if(real.a>real.h){stats[ai].pg++;stats[ai].pts+=3;stats[hi].pp++;}
+    else{stats[hi].pe++;stats[ai].pe++;stats[hi].pts++;stats[ai].pts++;}
+  });
+  stats.forEach(function(s){s.dif=s.gf-s.gc;});
+  stats.sort(function(a,b){return b.pts-a.pts||b.dif-a.dif||b.gf-a.gf;});
+  return stats;
+}
+async function renderPosiciones(){
+  var cont=document.getElementById('pos-cont');if(!cont)return;
+  cont.innerHTML='<div style="text-align:center;padding:20px;color:var(--muted);">Calculando...<\/div>';
+  await loadRR();
+  var standings={};
+  GS.forEach(function(g){standings[g]=calcGroupStandings(g);});
+
+  var h='<div class="evol-msec-title" style="margin-top:0;">Tabla de Grupos (1ro y 2do)<\/div>';
+  h+='<div class="pos-groups-grid">';
+  GS.forEach(function(g){
+    var st=standings[g];
+    h+='<div class="pos-group-card"><div class="pos-group-title">Grupo '+g+'<\/div>';
+    st.slice(0,2).forEach(function(t,i){
+      h+='<div class="pos-team-row"><span class="pos-team-rank">'+(i+1)+'<\/span><span>'+t.f+'<\/span><span class="pos-team-name">'+t.n+'<\/span><span class="pos-team-pts">'+t.pts+'pts<\/span><\/div>';
+    });
+    h+='<\/div>';
+  });
+  h+='<\/div>';
+
+  // Round of 32 bracket using official FIFA matchups
+  function W(g){return standings[g][0]?standings[g][0].n:null;}
+  function WF(g){return standings[g][0]?standings[g][0].f:'';}
+  function R(g){return standings[g][1]?standings[g][1].n:null;}
+  function RF(g){return standings[g][1]?standings[g][1].f:'';}
+  // Best third-placed teams ranking (8 of 12 advance)
+  var thirds=GS.map(function(g){
+    var t=standings[g][2];
+    return t?{g:g,n:t.n,f:t.f,pts:t.pts,dif:t.dif,gf:t.gf,pj:t.pj}:null;
+  }).filter(function(x){return x&&x.pj>0;});
+  thirds.sort(function(a,b){return b.pts-a.pts||b.dif-a.dif||b.gf-a.gf;});
+  h+='<div class="evol-msec-title">Mejores Terceros Lugares (8 de 12 avanzan)<\/div>';
+  if(!thirds.length){
+    h+='<div class="ibox">Aun no hay suficientes partidos jugados para calcular terceros lugares.<\/div>';
+  }else{
+    h+='<div class="pos-group-card">';
+    thirds.forEach(function(t,i){
+      var qualifies=i<8;
+      h+='<div class="pos-team-row" style="'+(qualifies?'':'opacity:0.45;')+'"><span class="pos-team-rank" style="color:'+(qualifies?'#2a8a4c':'var(--muted)')+';">'+(i+1)+'<\/span><span>'+t.f+'<\/span><span class="pos-team-name">'+t.n+' <span style="color:var(--muted);font-weight:400;font-size:10px;">(Grupo '+t.g+')<\/span><\/span><span class="pos-team-pts">'+t.pts+'pts &middot; '+(t.dif>=0?'+':'')+t.dif+'<\/span>'+(qualifies?'<span style="font-size:9px;color:#2a8a4c;margin-left:6px;">CLASIFICA<\/span>':'')+'<\/div>';
+    });
+    h+='<\/div>';
+  }
+
+  var r32=[
+    {n:73,a:{lbl:'2do Grupo A',name:R('A'),flag:RF('A')},b:{lbl:'2do Grupo B',name:R('B'),flag:RF('B')}},
+    {n:74,a:{lbl:'1ro Grupo E',name:W('E'),flag:WF('E')},b:{lbl:'3ro A/B/C/D/F',name:null,flag:''}},
+    {n:75,a:{lbl:'1ro Grupo F',name:W('F'),flag:WF('F')},b:{lbl:'2do Grupo C',name:R('C'),flag:RF('C')}},
+    {n:76,a:{lbl:'1ro Grupo C',name:W('C'),flag:WF('C')},b:{lbl:'2do Grupo F',name:R('F'),flag:RF('F')}},
+    {n:77,a:{lbl:'1ro Grupo I',name:W('I'),flag:WF('I')},b:{lbl:'3ro C/D/F/G/H',name:null,flag:''}},
+    {n:78,a:{lbl:'2do Grupo E',name:R('E'),flag:RF('E')},b:{lbl:'2do Grupo I',name:R('I'),flag:RF('I')}},
+    {n:79,a:{lbl:'1ro Grupo A',name:W('A'),flag:WF('A')},b:{lbl:'3ro C/E/F/H/I',name:null,flag:''}},
+    {n:80,a:{lbl:'1ro Grupo L',name:W('L'),flag:WF('L')},b:{lbl:'3ro E/H/I/J/K',name:null,flag:''}},
+    {n:81,a:{lbl:'1ro Grupo D',name:W('D'),flag:WF('D')},b:{lbl:'3ro B/E/F/I/J',name:null,flag:''}},
+    {n:82,a:{lbl:'1ro Grupo G',name:W('G'),flag:WF('G')},b:{lbl:'3ro A/E/H/I/J',name:null,flag:''}},
+    {n:83,a:{lbl:'2do Grupo K',name:R('K'),flag:RF('K')},b:{lbl:'2do Grupo L',name:R('L'),flag:RF('L')}},
+    {n:84,a:{lbl:'1ro Grupo H',name:W('H'),flag:WF('H')},b:{lbl:'2do Grupo J',name:R('J'),flag:RF('J')}},
+    {n:85,a:{lbl:'1ro Grupo B',name:W('B'),flag:WF('B')},b:{lbl:'3ro E/F/G/I/J',name:null,flag:''}},
+    {n:86,a:{lbl:'1ro Grupo J',name:W('J'),flag:WF('J')},b:{lbl:'2do Grupo H',name:R('H'),flag:RF('H')}},
+    {n:87,a:{lbl:'1ro Grupo K',name:W('K'),flag:WF('K')},b:{lbl:'3ro D/E/I/J/L',name:null,flag:''}},
+    {n:88,a:{lbl:'2do Grupo D',name:R('D'),flag:RF('D')},b:{lbl:'2do Grupo G',name:R('G'),flag:RF('G')}}
+  ];
+  h+='<div class="evol-msec-title">Cruces de Dieciseisavos (Round of 32)<\/div>';
+  h+='<div class="ibox" style="font-size:11px;">Los cruces marcados "3ro [grupos]" dependen de los 8 mejores terceros lugares y solo se confirman cuando terminen los 72 partidos de grupo.<\/div>';
+  r32.forEach(function(m){
+    var aReady=!!m.a.name,bReady=!!m.b.name;
+    var pending=!aReady||!bReady;
+    h+='<div class="r32-match'+(pending?' pending':'')+'"><span class="r32-num">M'+m.n+'<\/span>';
+    h+='<div class="r32-side">'+(aReady?(m.a.flag+' '+m.a.name):'<span style="color:var(--muted);font-size:10px;">'+m.a.lbl+'<\/span>')+'<\/div>';
+    h+='<span class="r32-vs">vs<\/span>';
+    h+='<div class="r32-side" style="text-align:right;justify-content:flex-end;">'+(bReady?(m.b.flag+' '+m.b.name):'<span style="color:var(--muted);font-size:10px;">'+m.b.lbl+'<\/span>')+'<\/div><\/div>';
+  });
+  cont.innerHTML=h;
+}
 async function renderTodayBanner(){
   var box=document.getElementById('today-banner');if(!box)return;
   if(!CU||CU==='__adm__'){box.style.display='none';return;}
