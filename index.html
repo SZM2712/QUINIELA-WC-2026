@@ -1059,37 +1059,27 @@ function calcWinProbabilities(){
   if(!users.length)return{};
   var totalMatches=72;
   KO_ROUNDS.forEach(function(r){totalMatches+=KO_SIZES[r];});
+  var played=0;
+  GS.forEach(function(g){MU.forEach(function(p,mi){var real=rr.gr&&rr.gr[g]?rr.gr[g][mi]:null;if(real&&real.h!==null&&real.a!==null)played++;});});
+  KO_ROUNDS.forEach(function(rnd){var n=KO_SIZES[rnd];for(var i=0;i<n;i++){var real=rr.ko&&rr.ko[rnd]?rr.ko[rnd][i]:null;if(real&&real.h!==null&&real.a!==null)played++;}});
+  var pctPlayed=played/totalMatches; // 0 = start, 1 = end
   var stats=users.map(function(u){
     var r=calcUserPoints(u,rr);
-    var played=0;
-    GS.forEach(function(g){MU.forEach(function(p,mi){var real=rr.gr&&rr.gr[g]?rr.gr[g][mi]:null;if(real&&real.h!==null&&real.a!==null)played++;});});
-    KO_ROUNDS.forEach(function(rnd){var n=KO_SIZES[rnd];for(var i=0;i<n;i++){var real=rr.ko&&rr.ko[rnd]?rr.ko[rnd][i]:null;if(real&&real.h!==null&&real.a!==null)played++;}});
-    var rate=played>0?r.total/played:0;
-    var remaining=Math.max(0,totalMatches-played);
-    var projected=r.total+rate*remaining;
-    return{name:u.name,projected:projected,remaining:remaining,played:played};
+    return{name:u.name,pts:r.total};
   });
-  // Uncertainty grows with matches remaining: early in the tournament everyone still
-  // has a real shot, so we widen the spread (temperature) based on % of tournament left.
-  var pctRemaining=stats.length?stats[0].remaining/totalMatches:1;
-  var maxProj=Math.max.apply(null,stats.map(function(s){return s.projected;}));
-  var minProj=Math.min.apply(null,stats.map(function(s){return s.projected;}));
-  var range=Math.max(1,maxProj-minProj);
-  // temperature: higher = flatter distribution (more uncertainty). Scales with remaining tournament.
-  var temperature=range*(0.25+0.5*pctRemaining);
-  var weights=stats.map(function(s){return Math.exp((s.projected-maxProj)/temperature);});
-  var sumW=weights.reduce(function(a,b){return a+b;},0);
-  // Floor: nobody shows literal 0% while the tournament isn't over
-  var floorPct=stats.length?Math.min(2,100/stats.length/3):0;
+  var maxPts=Math.max.apply(null,stats.map(function(s){return s.pts;}))||1;
+  // Temperature: high early (flat, uncertain), low late (concentrated near leader).
+  // At 0% played: temp=1.5 (very flat). At 100% played: temp=0.08 (very concentrated).
+  var temperature=0.6-0.52*pctPlayed;
+  // Fading bonus: gives everyone a small lift early (uncertainty), fades to 0 at end
+  var bonus=0.08*(1-pctPlayed);
+  var weights=stats.map(function(s){return Math.exp((s.pts-maxPts)/temperature)+bonus;});
+  var sumW=weights.reduce(function(a,b){return a+b;},0)||1;
   var probs={};
-  var raw={};
-  stats.forEach(function(s,i){raw[s.name]=sumW>0?(weights[i]/sumW*100):0;});
-  var totalRaw=Object.values(raw).reduce(function(a,b){return a+b;},0)||1;
-  // Apply floor then renormalize so total stays 100%
-  var floored={};
-  stats.forEach(function(s){floored[s.name]=Math.max(floorPct,raw[s.name]);});
-  var totalFloored=Object.values(floored).reduce(function(a,b){return a+b;},0)||1;
-  stats.forEach(function(s){probs[s.name]=floored[s.name]/totalFloored*100;});
+  stats.forEach(function(s,i){probs[s.name]=weights[i]/sumW*100;});
+  // Renormalize to sum to 100
+  var total=Object.values(probs).reduce(function(a,b){return a+b;},0)||1;
+  stats.forEach(function(s){probs[s.name]=probs[s.name]/total*100;});
   return probs;
 }
 function renderEvolDetail(name){
@@ -1146,10 +1136,14 @@ function renderEvolDetail(name){
       koRows.push({rnd:KO_NAMES[r],h:hn,hf:hf,a:an,af:af,pred:pred.h+'-'+pred.a,real:real.h+'-'+real.a,pts:pts,hit:won,exact:exact});
     }
   });
-  var probs=calcWinProbabilities();
-  var myProb=probs[name]||0;
+  var totalPlayed=grHits+grMiss+koHits+koMiss;
+  var totalExact=grExact+koExact;
+  var totalWinOnly=(grHits+koHits)-totalExact;
+  var pctExact=totalPlayed>0?Math.round(totalExact/totalPlayed*100):0;
+  var pctWin=totalPlayed>0?Math.round(totalWinOnly/totalPlayed*100):0;
   var h='<div class="evol-msec-title" style="margin-top:0;color:var(--text);font-size:20px;">'+name+'<\/div><div class="evol-stat-banner">';
-  h+='<div class="pi"><div class="pilbl">Prob. de Ganar<\/div><div class="pival" style="color:var(--gold)">'+myProb.toFixed(1)+'%<\/div><\/div>';
+  h+='<div class="pi"><div class="pilbl">Marcador Exacto<\/div><div class="pival" style="color:#c07820">'+pctExact+'%<\/div><\/div>';
+  h+='<div class="pi"><div class="pilbl">Solo Ganador<\/div><div class="pival" style="color:#4a9a6a">'+pctWin+'%<\/div><\/div>';
   h+='<div class="pi"><div class="pilbl">Aciertos Grupos<\/div><div class="pival" style="color:#2a8a4c">'+grHits+'\/'+(grHits+grMiss)+'<\/div><\/div>';
   h+='<div class="pi"><div class="pilbl">Marc. Exactos Gr.<\/div><div class="pival" style="color:#c07820">'+grExact+'<\/div><\/div>';
   h+='<div class="pi"><div class="pilbl">Pts Grupos<\/div><div class="pival" style="color:var(--gold)">'+grPtsTotal+'<\/div><\/div>';
