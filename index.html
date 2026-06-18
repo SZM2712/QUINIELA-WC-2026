@@ -161,7 +161,7 @@ h1 span{color:var(--gold);}
 .pos-team-rank{width:18px;font-family:'Bebas Neue',sans-serif;font-size:14px;color:var(--muted);}
 .pos-team-name{flex:1;font-weight:600;}
 .pos-team-pts{font-size:11px;color:var(--muted);}
-.pos-groups-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:16px;}
+.pos-groups-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:8px;margin-bottom:16px;}
 .r32-match{display:flex;align-items:center;justify-content:space-between;background:var(--panel);border:1px solid var(--border);padding:8px 10px;margin-bottom:6px;font-size:12px;}
 .r32-match.pending{opacity:0.55;}
 .r32-side{flex:1;display:flex;align-items:center;gap:6px;}
@@ -2022,15 +2022,17 @@ async function renderPosiciones(){
   var standings={};
   GS.forEach(function(g){standings[g]=calcGroupStandings(g);});
 
-  var h='<div class="evol-msec-title" style="margin-top:0;">Tabla de Grupos (1ro y 2do)<\/div>';
+  var h='<div class="evol-msec-title" style="margin-top:0;">Tabla de Grupos<\/div>';
   h+='<div class="pos-groups-grid">';
   GS.forEach(function(g){
     var st=standings[g];
-    h+='<div class="pos-group-card"><div class="pos-group-title">Grupo '+g+'<\/div>';
-    st.slice(0,2).forEach(function(t,i){
-      h+='<div class="pos-team-row"><span class="pos-team-rank">'+(i+1)+'<\/span><span>'+t.f+'<\/span><span class="pos-team-name">'+t.n+'<\/span><span class="pos-team-pts">'+t.pts+'pts<\/span><\/div>';
+    h+='<div class="pos-group-card" style="padding:0;overflow:hidden;"><div class="pos-group-title" style="padding:8px 10px 4px;margin-bottom:0;">Grupo '+g+'<\/div>';
+    h+='<table class="sttbl" style="font-size:11px;"><thead><tr><th><\/th><th>Equipo<\/th><th>PJ<\/th><th>GF<\/th><th>DG<\/th><th>Pts<\/th><\/tr><\/thead><tbody>';
+    var bClasses=['b1','b2','b3','b4'],rcClasses=['q1','q2','q3',''];
+    st.forEach(function(t,i){
+      h+='<tr class="'+rcClasses[i]+'"><td><span class="pbadge '+bClasses[i]+'">'+(i+1)+'<\/span><\/td><td><div class="tcell"><span>'+t.f+'<\/span>'+t.n+'<\/div><\/td><td>'+t.pj+'<\/td><td>'+t.gf+'<\/td><td>'+(t.dif>=0?'+':'')+t.dif+'<\/td><td class="stpts">'+t.pts+'<\/td><\/tr>';
     });
-    h+='<\/div>';
+    h+='<\/tbody><\/table><\/div>';
   });
   h+='<\/div>';
 
