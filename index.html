@@ -761,9 +761,19 @@ async function renderRanking(){
   var prizeAmts=[pot*PRIZE[0],pot*PRIZE[1],pot*PRIZE[2],FEE];
   var ranked=users.map(function(u){var r=calcUserPoints(u,rr);return{name:u.name,pts:r.total,grPts:r.grPts,koPts:r.koPts};}).sort(function(a,b){return b.pts-a.pts;});
 
-  // Assign prize-rank by DISTINCT score group: the group with the highest points is
-  // "1st place" (rank 0), the next distinct lower score is "2nd place" (rank 1), etc.
-  // Ties within a group share that rank and split only that rank's prize.
+  // Position change vs "yesterday" (using the second-to-last played date if available)
+  var dates=getPlayedDates(rr);
+  var prevRankPos={};
+  if(dates.length>1){
+    var prevDate=dates[dates.length-2];
+    var prevRanked=users.map(function(u){return{name:u.name,pts:calcUserPointsUpTo(u,rr,prevDate)};}).sort(function(a,b){return b.pts-a.pts;});
+    prevRanked.forEach(function(u,i){prevRankPos[u.name]=i;});
+  }
+
+  // Hit streak: consecutive most-recent matches (any type) where the user scored points
+  var streaks=computeStreaks(users);
+
+  // Assign prize-rank by DISTINCT score group
   var groups=[];
   ranked.forEach(function(u){
     var last=groups[groups.length-1];
@@ -780,6 +790,22 @@ async function renderRanking(){
   var prizes={first:prizeAmts[0],second:prizeAmts[1],third:prizeAmts[2],fourth:prizeAmts[3]};
   var h='<div class="rank-banner"><div class="pi"><div class="pilbl">Participantes<\/div><div class="pival" style="color:var(--text)">'+n+'<\/div><\/div><div class="pi"><div class="pilbl">Pozo<\/div><div class="pival" style="color:var(--gold)">'+CUR+total.toFixed(0)+'<\/div><\/div><div class="pi"><div class="pilbl">1er Lugar<\/div><div class="pival" style="color:var(--gold)">'+CUR+prizes.first.toFixed(0)+'<\/div><\/div><div class="pi"><div class="pilbl">2do Lugar<\/div><div class="pival" style="color:#9aa0aa">'+CUR+prizes.second.toFixed(0)+'<\/div><\/div><div class="pi"><div class="pilbl">3er Lugar<\/div><div class="pival" style="color:#a07040">'+CUR+prizes.third.toFixed(0)+'<\/div><\/div><div class="pi"><div class="pilbl">4to Lugar<\/div><div class="pival" style="color:var(--muted)">Recupera '+CUR+FEE+'<\/div><\/div><\/div>';
   if(!n){cont.innerHTML=h+'<div style="text-align:center;padding:24px;color:var(--muted);">Aun no hay participantes.<\/div>';return;}
+
+  // Horizontal bar chart
+  var maxPts=Math.max.apply(null,ranked.map(function(u){return u.pts;}))||1;
+  var barColors=evolColors();
+  h+='<div style="background:var(--panel);border:1px solid var(--border);padding:10px 12px;margin-bottom:12px;">';
+  ranked.forEach(function(u,i){
+    var pct=Math.max(2,Math.round(u.pts/maxPts*100));
+    var color=barColors[i%barColors.length];
+    h+='<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px;">';
+    h+='<span style="width:88px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex-shrink:0;">'+u.name+'<\/span>';
+    h+='<div style="flex:1;background:#1a2030;height:14px;position:relative;"><div style="height:100%;width:'+pct+'%;background:'+color+';"><\/div><\/div>';
+    h+='<span style="width:28px;text-align:right;color:var(--gold);font-weight:700;flex-shrink:0;">'+u.pts+'<\/span>';
+    h+='<\/div>';
+  });
+  h+='<\/div>';
+
   h+='<table class="rtbl"><thead><tr><th>Pos<\/th><th>Participante<\/th><th class="rr">Grupos<\/th><th class="rr">Eliminatorias<\/th><th class="rr">Total<\/th><th class="rr">Premio<\/th><\/tr><\/thead><tbody>';
   var medals=['🥇','🥈','🥉','4'];
   rows.forEach(function(row){
@@ -787,10 +813,46 @@ async function renderRanking(){
     var col=i===0?'var(--gold)':i===1?'#9aa0aa':i===2?'#a07040':'var(--muted)';
     var posLabel=(i<4?medals[i]:String(i+1));
     var prizeLabel=row.share>0?CUR+row.share.toFixed(0)+(span>1?' c\/u':''):'—';
-    h+='<tr><td style="font-family:\'Bebas Neue\',sans-serif;font-size:'+(span>1?'14':'20')+'px;color:'+col+';">'+posLabel+'<\/td><td style="font-weight:700;">'+u.name+'<\/td><td style="text-align:right;color:#4a9a6a;">'+u.grPts+'<\/td><td style="text-align:right;color:#4a6a9a;">'+u.koPts+'<\/td><td style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:20px;color:var(--gold);">'+u.pts+'<\/td><td style="text-align:right;color:'+col+';">'+prizeLabel+'<\/td><\/tr>';
+    var currentIdx=ranked.findIndex(function(x){return x.name===u.name;});
+    var arrow='';
+    if(prevRankPos[u.name]!==undefined){
+      var diff=prevRankPos[u.name]-currentIdx;
+      if(diff>0)arrow='<span style="color:#2a8a4c;font-size:10px;margin-left:4px;">&#9650;'+diff+'<\/span>';
+      else if(diff<0)arrow='<span style="color:var(--red);font-size:10px;margin-left:4px;">&#9660;'+Math.abs(diff)+'<\/span>';
+      else arrow='<span style="color:var(--muted);font-size:10px;margin-left:4px;">&#9644;<\/span>';
+    }
+    var streak=streaks[u.name]||0;
+    var streakBadge=streak>=2?'<span style="font-size:9px;color:#ff8c1a;margin-left:4px;">&#128293;'+streak+'<\/span>':'';
+    h+='<tr><td style="font-family:\'Bebas Neue\',sans-serif;font-size:'+(span>1?'14':'20')+'px;color:'+col+';">'+posLabel+'<\/td><td style="font-weight:700;">'+u.name+arrow+streakBadge+'<\/td><td style="text-align:right;color:#4a9a6a;">'+u.grPts+'<\/td><td style="text-align:right;color:#4a6a9a;">'+u.koPts+'<\/td><td style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:20px;color:var(--gold);">'+u.pts+'<\/td><td style="text-align:right;color:'+col+';">'+prizeLabel+'<\/td><\/tr>';
   });
   h+='<\/tbody><\/table>';
   cont.innerHTML=h;
+}
+function computeStreaks(users){
+  // Build chronological list of all played matches (group + ko) with their date (ko has no exact date, treated as "latest")
+  var streaks={};
+  users.forEach(function(u){
+    var seq=[]; // true = scored points, false = missed, in chronological order
+    var dateMatches=[];
+    GS.forEach(function(g){
+      MU.forEach(function(p,mi){
+        var real=rr.gr&&rr.gr[g]?rr.gr[g][mi]:null;
+        if(!real||real.h===null||real.a===null)return;
+        var hn=TEAMS[g][p[0]].n,an=TEAMS[g][p[1]].n;
+        var sm=SCHEDULE.find(function(m){return m.g===g&&((m.h===hn&&m.a===an)||(m.h===an&&m.a===hn));});
+        var pred=u.scores&&u.scores[g]?u.scores[g][mi]:null;
+        var scored=!!(pred&&pred.h!==null&&pred.a!==null&&((pred.h>pred.a?'h':pred.a>pred.h?'a':'d')===(real.h>real.a?'h':real.a>real.h?'a':'d')));
+        dateMatches.push({d:sm?sm.d:'9999',scored:scored});
+      });
+    });
+    dateMatches.sort(function(a,b){return a.d<b.d?-1:a.d>b.d?1:0;});
+    var streak=0;
+    for(var i=dateMatches.length-1;i>=0;i--){
+      if(dateMatches[i].scored)streak++;else break;
+    }
+    streaks[u.name]=streak;
+  });
+  return streaks;
 }
 
 // ── EVOLUCION ─────────────────────────────────
@@ -1408,24 +1470,73 @@ function showTab(t,btn){
   if(t==='admin')renderAdmin();
 }
 function renderAll(){renderGrupos();renderElim();}
-function renderTodayBanner(){
+async function renderTodayBanner(){
   var box=document.getElementById('today-banner');if(!box)return;
   if(!CU||CU==='__adm__'){box.style.display='none';return;}
   var matches=getTodayMatches();
-  if(!matches.length){box.style.display='none';return;}
-  var h='<div class="today-banner-title">&#9917; Tus predicciones para hoy<\/div>';
-  matches.forEach(function(match){
-    var g=match.g,pred=null;
-    MU.forEach(function(p,mi){
-      var hn=TEAMS[g][p[0]].n,an=TEAMS[g][p[1]].n;
-      var sc=grSc[g]?grSc[g][mi]:null;
-      if(!sc||sc.h===null||sc.a===null)return;
-      if(hn===match.h&&an===match.a)pred={h:sc.h,a:sc.a};
-      else if(hn===match.a&&an===match.h)pred={h:sc.a,a:sc.h};
+  var h='';
+  if(matches.length){
+    h+='<div class="today-banner-title">&#9917; Tus predicciones para hoy<\/div>';
+    matches.forEach(function(match){
+      var g=match.g,pred=null;
+      MU.forEach(function(p,mi){
+        var hn=TEAMS[g][p[0]].n,an=TEAMS[g][p[1]].n;
+        var sc=grSc[g]?grSc[g][mi]:null;
+        if(!sc||sc.h===null||sc.a===null)return;
+        if(hn===match.h&&an===match.a)pred={h:sc.h,a:sc.a};
+        else if(hn===match.a&&an===match.h)pred={h:sc.a,a:sc.h};
+      });
+      var mid=pred?(pred.h+' - '+pred.a):'<span style="color:var(--muted);font-size:11px;">Sin predecir<\/span>';
+      h+='<div class="today-match"><span class="today-mt" style="text-align:right;">'+match.hf+' '+match.h+'<\/span><span class="today-msc">'+mid+'<\/span><span class="today-mt">'+match.a+' '+match.af+'<\/span><\/div>';
     });
-    var mid=pred?(pred.h+' - '+pred.a):'<span style="color:var(--muted);font-size:11px;">Sin predecir<\/span>';
-    h+='<div class="today-match"><span class="today-mt" style="text-align:right;">'+match.hf+' '+match.h+'<\/span><span class="today-msc">'+mid+'<\/span><span class="today-mt">'+match.a+' '+match.af+'<\/span><\/div>';
-  });
+  }
+  // Momento destacado: computed across all participants based on real results so far
+  try{
+    await loadRR();
+    var users=await getAllUsers();
+    if(users.length){
+      var streaks=computeStreaks(users);
+      var topStreak=null;
+      Object.keys(streaks).forEach(function(name){
+        if(streaks[name]>=2&&(!topStreak||streaks[name]>topStreak.streak))topStreak={name:name,streak:streaks[name]};
+      });
+      var highlight='';
+      if(topStreak){
+        highlight='&#128293; '+topStreak.name+' lleva '+topStreak.streak+' aciertos seguidos';
+      }else{
+        // Find last played group match and see how many got it right
+        var dates=getPlayedDates(rr);
+        if(dates.length){
+          var lastDate=dates[dates.length-1];
+          var lastMatches=SCHEDULE.filter(function(m){return m.d===lastDate;});
+          if(lastMatches.length){
+            var lm=lastMatches[lastMatches.length-1];
+            var g=lm.g;
+            var hitCount=0;
+            users.forEach(function(u){
+              MU.forEach(function(p,mi){
+                var hn=TEAMS[g][p[0]].n,an=TEAMS[g][p[1]].n;
+                if(!((hn===lm.h&&an===lm.a)||(hn===lm.a&&an===lm.h)))return;
+                var real=rr.gr&&rr.gr[g]?rr.gr[g][mi]:null;
+                var pred=u.scores&&u.scores[g]?u.scores[g][mi]:null;
+                if(real&&pred&&pred.h!==null&&pred.a!==null){
+                  var pw=pred.h>pred.a?'h':pred.a>pred.h?'a':'d',rw=real.h>real.a?'h':real.a>real.h?'a':'d';
+                  if(pw===rw)hitCount++;
+                }
+              });
+            });
+            var pct=Math.round(hitCount/users.length*100);
+            if(pct<=30)highlight='&#128561; Solo el '+pct+'% acerto '+lm.h+' vs '+lm.a;
+            else if(pct>=80)highlight='&#9989; El '+pct+'% acerto '+lm.h+' vs '+lm.a;
+          }
+        }
+      }
+      if(highlight){
+        h+='<div style="margin-top:8px;padding-top:8px;border-top:1px solid #2a2410;font-size:12px;color:#ffb347;">'+highlight+'<\/div>';
+      }
+    }
+  }catch(e){}
+  if(!h){box.style.display='none';return;}
   box.innerHTML=h;
   box.style.display='block';
 }
