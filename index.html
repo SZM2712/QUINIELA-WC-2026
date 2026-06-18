@@ -1527,25 +1527,67 @@ async function renderTodayBanner(){
     await loadRR();
     var users=allUsers.length?allUsers:await getAllUsers();
     if(users.length){
-      var streaks=computeStreaks(users);
-      var maxExact=0,maxWin=0;
-      Object.keys(streaks).forEach(function(name){
-        if(streaks[name].exact>maxExact)maxExact=streaks[name].exact;
-        if(streaks[name].win>maxWin)maxWin=streaks[name].win;
-      });
       var highlight='';
-      if(maxExact>=2){
-        var exactNames=Object.keys(streaks).filter(function(name){return streaks[name].exact===maxExact;});
-        var namesStr=exactNames.length>1?(exactNames.slice(0,-1).join(', ')+' y '+exactNames[exactNames.length-1]):exactNames[0];
-        var verb=exactNames.length>1?'llevan':'lleva';
-        highlight='&#127919; '+namesStr+' '+verb+' '+maxExact+' marcadores EXACTOS seguidos';
-      }else if(maxWin>=2){
-        var winNames=Object.keys(streaks).filter(function(name){return streaks[name].win===maxWin;});
-        var namesStr2=winNames.length>1?(winNames.slice(0,-1).join(', ')+' y '+winNames[winNames.length-1]):winNames[0];
-        var verb2=winNames.length>1?'llevan':'lleva';
-        highlight='&#128293; '+namesStr2+' '+verb2+' '+maxWin+' aciertos seguidos';
-      }else{
-        // Find last played group match and see how many got it right
+      // PRIORITY 1: Upset detection on the most recent played match
+      var dates0=getPlayedDates(rr);
+      if(dates0.length){
+        var lastDate0=dates0[dates0.length-1];
+        var lastMatches0=SCHEDULE.filter(function(m){return m.d===lastDate0;});
+        if(lastMatches0.length){
+          var lm0=lastMatches0[lastMatches0.length-1];
+          var g0=lm0.g;
+          var real0=null,votes0={h:0,a:0,d:0},hitCount0=0;
+          MU.forEach(function(p,mi){
+            var hn=TEAMS[g0][p[0]].n,an=TEAMS[g0][p[1]].n;
+            if(!((hn===lm0.h&&an===lm0.a)||(hn===lm0.a&&an===lm0.h)))return;
+            real0=rr.gr&&rr.gr[g0]?rr.gr[g0][mi]:null;
+            users.forEach(function(u){
+              var pred=u.scores&&u.scores[g0]?u.scores[g0][mi]:null;
+              if(!pred||pred.h===null||pred.a===null)return;
+              var predRealH=hn===lm0.h?pred.h:pred.a,predRealA=hn===lm0.h?pred.a:pred.h;
+              if(predRealH>predRealA)votes0.h++;else if(predRealA>predRealH)votes0.a++;else votes0.d++;
+              if(real0&&real0.h!==null){
+                var pw=pred.h>pred.a?'h':pred.a>pred.h?'a':'d',rw=real0.h>real0.a?'h':real0.a>real0.h?'a':'d';
+                if(pw===rw)hitCount0++;
+              }
+            });
+          });
+          var totalV0=votes0.h+votes0.a+votes0.d;
+          if(real0&&real0.h!==null&&totalV0>0){
+            var actualW=real0.h>real0.a?'h':real0.a>real0.h?'a':'d';
+            var actualVoteCount=actualW==='h'?votes0.h:actualW==='a'?votes0.a:votes0.d;
+            var actualPct=Math.round(actualVoteCount/totalV0*100);
+            var hitPct=Math.round(hitCount0/users.length*100);
+            // Upset = the outcome that happened was the LEAST predicted option, and few people called it
+            var minVotes=Math.min(votes0.h,votes0.a,votes0.d);
+            if(actualVoteCount===minVotes&&hitPct<=25&&totalV0>=5){
+              highlight='&#128165; UPSET! Solo el '+hitPct+'% vio venir que '+(actualW==='d'?'empataran':(actualW==='h'?lm0.h:lm0.a)+' le ganara a '+(actualW==='h'?lm0.a:lm0.h));
+            }
+          }
+        }
+      }
+      // PRIORITY 2: Streaks (exact > win)
+      if(!highlight){
+        var streaks=computeStreaks(users);
+        var maxExact=0,maxWin=0;
+        Object.keys(streaks).forEach(function(name){
+          if(streaks[name].exact>maxExact)maxExact=streaks[name].exact;
+          if(streaks[name].win>maxWin)maxWin=streaks[name].win;
+        });
+        if(maxExact>=2){
+          var exactNames=Object.keys(streaks).filter(function(name){return streaks[name].exact===maxExact;});
+          var namesStr=exactNames.length>1?(exactNames.slice(0,-1).join(', ')+' y '+exactNames[exactNames.length-1]):exactNames[0];
+          var verb=exactNames.length>1?'llevan':'lleva';
+          highlight='&#127919; '+namesStr+' '+verb+' '+maxExact+' marcadores EXACTOS seguidos';
+        }else if(maxWin>=2){
+          var winNames=Object.keys(streaks).filter(function(name){return streaks[name].win===maxWin;});
+          var namesStr2=winNames.length>1?(winNames.slice(0,-1).join(', ')+' y '+winNames[winNames.length-1]):winNames[0];
+          var verb2=winNames.length>1?'llevan':'lleva';
+          highlight='&#128293; '+namesStr2+' '+verb2+' '+maxWin+' aciertos seguidos';
+        }
+      }
+      // PRIORITY 3: Generic last-match hit rate commentary
+      if(!highlight){
         var dates=getPlayedDates(rr);
         if(dates.length){
           var lastDate=dates[dates.length-1];
