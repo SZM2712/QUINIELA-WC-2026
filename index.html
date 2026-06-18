@@ -212,15 +212,11 @@ h1 span{color:var(--gold);}
   </div>
   <div id="tab-evol" class="view">
     <div style="max-width:1100px;margin:0 auto;padding:10px 0;">
-      <div class="ibox">Evolucion de puntos totales por dia. Toca chips para elegir quien se muestra en la grafica (sin selecciones, se muestran todos).</div>
+      <div class="ibox">Evolucion de puntos totales por dia. Toca chips para elegir quien se muestra en la grafica y el detalle de abajo (sin selecciones, se muestran todos en la grafica sin detalle).</div>
       <div id="evol-cont"><div style="text-align:center;padding:20px;color:var(--muted);">Cargando...</div></div>
       <div style="margin-top:14px;">
-        <label class="ll">Filtrar participantes en la grafica</label>
+        <label class="ll">Filtrar participantes</label>
         <div id="evol-chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px;"></div>
-        <label class="ll">Ver detalle partido por partido</label>
-        <select id="evol-detail-select" class="li" style="margin-bottom:10px;" onchange="renderEvolDetail(this.value)">
-          <option value="">Elegir participante...</option>
-        </select>
       </div>
       <div id="evol-detail"></div>
     </div>
@@ -862,6 +858,7 @@ async function renderEvol(){
   if(!window._evolSelected)window._evolSelected={};
 
   drawEvolChart();
+  renderEvolDetailList();
 
   // Populate chip selector (free toggle, no forced selections)
   var chipsEl=document.getElementById('evol-chips');
@@ -876,19 +873,12 @@ async function renderEvol(){
     });
     chipsEl.innerHTML=html;
   }
-  var detSel=document.getElementById('evol-detail-select');
-  if(detSel){
-    var prevDetVal=detSel.value;
-    var detOpts=['<option value="">Elegir participante...<\/option>'];
-    nameList.slice().sort().forEach(function(n){detOpts.push('<option value="'+n.replace(/"/g,'&quot;')+'">'+n+'<\/option>');});
-    detSel.innerHTML=detOpts.join('');
-    if(prevDetVal&&nameList.includes(prevDetVal)){detSel.value=prevDetVal;renderEvolDetail(prevDetVal);}
-  }
 }
 function toggleEvolChip(name){
   window._evolSelected=window._evolSelected||{};
   window._evolSelected[name]=!window._evolSelected[name];
   drawEvolChart();
+  renderEvolDetailList();
   // refresh chip "on" states without rebuilding everything
   var chipsEl=document.getElementById('evol-chips');
   if(chipsEl){
@@ -897,6 +887,13 @@ function toggleEvolChip(name){
       btn.classList.toggle('on',!!window._evolSelected[n]);
     });
   }
+}
+function renderEvolDetailList(){
+  var det=document.getElementById('evol-detail');if(!det)return;
+  var selected=window._evolSelected||{};
+  var names=(window._evolNames||[]).filter(function(n){return selected[n];});
+  if(!names.length){det.innerHTML='';return;}
+  det.innerHTML=names.map(function(n){return renderEvolDetail(n);}).join('<div style="height:14px;"><\/div>');
 }
 function evolColors(){return['#D4AF37','#5fd38d','#6a9aff','#ff6b5f','#c98aff','#ffb347','#3fd4d4','#ff7ab8','#9fe85a','#b8c0cc','#ff9d6a','#7a8aff'];}
 function drawEvolChart(){
@@ -999,11 +996,10 @@ function calcWinProbabilities(){
   return probs;
 }
 function renderEvolDetail(name){
-  var det=document.getElementById('evol-detail');if(!det)return;
-  if(!name){det.innerHTML='';return;}
+  if(!name)return'';
   var users=window._evolUsers||[];
   var u=users.find(function(x){return x.name===name;});
-  if(!u){det.innerHTML='';return;}
+  if(!u)return'';
   var grHits=0,grMiss=0,koHits=0,koMiss=0,grPtsTotal=0,koPtsTotal=0,grExact=0,koExact=0;
   var grRows=[],koRows=[];
   // Grupos
@@ -1055,7 +1051,7 @@ function renderEvolDetail(name){
   });
   var probs=calcWinProbabilities();
   var myProb=probs[name]||0;
-  var h='<div class="evol-stat-banner">';
+  var h='<div class="evol-msec-title" style="margin-top:0;color:var(--text);font-size:20px;">'+name+'<\/div><div class="evol-stat-banner">';
   h+='<div class="pi"><div class="pilbl">Prob. de Ganar<\/div><div class="pival" style="color:var(--gold)">'+myProb.toFixed(1)+'%<\/div><\/div>';
   h+='<div class="pi"><div class="pilbl">Aciertos Grupos<\/div><div class="pival" style="color:#2a8a4c">'+grHits+'\/'+(grHits+grMiss)+'<\/div><\/div>';
   h+='<div class="pi"><div class="pilbl">Marc. Exactos Gr.<\/div><div class="pival" style="color:#c07820">'+grExact+'<\/div><\/div>';
@@ -1077,7 +1073,7 @@ function renderEvolDetail(name){
     });
   }
   if(!grRows.length&&!koRows.length)h+='<div style="text-align:center;padding:16px;color:var(--muted);">Aun no hay partidos con resultado real.<\/div>';
-  det.innerHTML=h;
+  return'<div style="background:var(--panel);border:1px solid var(--border);padding:12px;">'+h+'<\/div>';
 }
 
 // ── ADMIN ─────────────────────────────────────
