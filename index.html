@@ -212,10 +212,10 @@ h1 span{color:var(--gold);}
   </div>
   <div id="tab-evol" class="view">
     <div style="max-width:1100px;margin:0 auto;padding:10px 0;">
-      <div class="ibox">Evolucion de puntos totales por dia. Los 4 primeros lugares siempre se resaltan; toca chips para agregar o quitar participantes.</div>
+      <div class="ibox">Evolucion de puntos totales por dia. Toca chips para elegir quien se muestra en la grafica (sin selecciones, se muestran todos).</div>
       <div id="evol-cont"><div style="text-align:center;padding:20px;color:var(--muted);">Cargando...</div></div>
       <div style="margin-top:14px;">
-        <label class="ll">Agregar participantes a la grafica</label>
+        <label class="ll">Filtrar participantes en la grafica</label>
         <div id="evol-chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:14px;"></div>
         <label class="ll">Ver detalle partido por partido</label>
         <select id="evol-detail-select" class="li" style="margin-bottom:10px;" onchange="renderEvolDetail(this.value)">
@@ -855,21 +855,15 @@ async function renderEvol(){
     hist[d]={};
     users.forEach(function(u){hist[d][u.name]=calcUserPointsUpTo(u,rr,d);});
   });
-  // Cache everything needed to redraw the chart on filter change
   window._evolUsers=users;
   window._evolHist=hist;
   window._evolDates=dates;
   window._evolNames=nameList;
   if(!window._evolSelected)window._evolSelected={};
 
-  // Determine current top 4 by latest cumulative points (these are always shown)
-  var lastDate=dates[dates.length-1];
-  var ranked=nameList.map(function(n){return{n:n,pts:hist[lastDate][n]};}).sort(function(a,b){return b.pts-a.pts;});
-  window._evolTop4=ranked.slice(0,4).map(function(r){return r.n;});
-
   drawEvolChart();
 
-  // Populate chip selector (everyone not in top4 can be toggled on/off)
+  // Populate chip selector (free toggle, no forced selections)
   var chipsEl=document.getElementById('evol-chips');
   if(chipsEl){
     var colors=evolColors();
@@ -877,9 +871,8 @@ async function renderEvol(){
     nameList.slice().sort().forEach(function(n){
       var ni=nameList.indexOf(n);
       var color=colors[ni%colors.length];
-      var isTop4=window._evolTop4.includes(n);
-      var isOn=isTop4||window._evolSelected[n];
-      html+='<button class="evol-chip'+(isOn?' on':'')+(isTop4?' top4':'')+'" '+(isTop4?'disabled':'')+' onclick="toggleEvolChip(\''+n.replace(/'/g,"\\'")+'\')"><span class="evol-chip-dot" style="background:'+color+'"><\/span>'+n+(isTop4?' (Top4)':'')+'<\/button>';
+      var isOn=!!window._evolSelected[n];
+      html+='<button class="evol-chip'+(isOn?' on':'')+'" onclick="toggleEvolChip(\''+n.replace(/'/g,"\\'")+'\')"><span class="evol-chip-dot" style="background:'+color+'"><\/span>'+n+'<\/button>';
     });
     chipsEl.innerHTML=html;
   }
@@ -893,10 +886,17 @@ async function renderEvol(){
   }
 }
 function toggleEvolChip(name){
-  if(window._evolTop4&&window._evolTop4.includes(name))return; // top4 always on
   window._evolSelected=window._evolSelected||{};
   window._evolSelected[name]=!window._evolSelected[name];
-  renderEvol(); // rebuild chips + chart (data already cached, loadRR will just refetch lightly)
+  drawEvolChart();
+  // refresh chip "on" states without rebuilding everything
+  var chipsEl=document.getElementById('evol-chips');
+  if(chipsEl){
+    chipsEl.querySelectorAll('.evol-chip').forEach(function(btn){
+      var n=btn.textContent.trim();
+      btn.classList.toggle('on',!!window._evolSelected[n]);
+    });
+  }
 }
 function evolColors(){return['#D4AF37','#5fd38d','#6a9aff','#ff6b5f','#c98aff','#ffb347','#3fd4d4','#ff7ab8','#9fe85a','#b8c0cc','#ff9d6a','#7a8aff'];}
 function drawEvolChart(){
@@ -904,14 +904,13 @@ function drawEvolChart(){
   var hist=window._evolHist,dates=window._evolDates,nameList=window._evolNames;
   if(!hist||!dates)return;
   var colors=evolColors();
-  var top4=window._evolTop4||[];
   var selected=window._evolSelected||{};
-  var activeNames=nameList.filter(function(n){return top4.includes(n)||selected[n];});
-  var dimNames=nameList.filter(function(n){return !activeNames.includes(n);});
+  var anySelected=Object.values(selected).some(function(v){return v;});
+  var activeNames=anySelected?nameList.filter(function(n){return selected[n];}):nameList;
 
   var W=1000,H=480,padL=46,padR=16,padT=24,padB=44;
   var maxPts=1;
-  dates.forEach(function(d){nameList.forEach(function(n){var v=hist[d][n];if(v!==undefined&&v>maxPts)maxPts=v;});});
+  dates.forEach(function(d){activeNames.forEach(function(n){var v=hist[d][n];if(v!==undefined&&v>maxPts)maxPts=v;});});
   maxPts=Math.ceil(maxPts*1.12)||1;
   function xPos(i){return padL+(dates.length>1?i/(dates.length-1):0)*(W-padL-padR);}
   function yPos(v){return H-padB-(v/maxPts)*(H-padT-padB);}
@@ -936,19 +935,11 @@ function drawEvolChart(){
     var lbl=d.slice(5).replace('-','\/');
     svg+='<text x="'+xPos(i)+'" y="'+(H-padB+20)+'" fill="#8a93a3" font-size="11" text-anchor="middle">'+lbl+'<\/text>';
   });
-  // Dim (background) lines first
-  dimNames.forEach(function(name){
-    var ni=nameList.indexOf(name),color=colors[ni%colors.length];
-    var pts=dates.map(function(d,i){return[xPos(i),yPos(hist[d][name])];});
-    svg+='<path d="'+smoothPath(pts)+'" fill="none" stroke="'+color+'" stroke-width="1.5" opacity="0.18"/>';
-  });
-  // Active (highlighted) lines on top
   activeNames.forEach(function(name){
     var ni=nameList.indexOf(name),color=colors[ni%colors.length];
     var pts=dates.map(function(d,i){return[xPos(i),yPos(hist[d][name])];});
-    var isTop4=top4.includes(name);
-    svg+='<path d="'+smoothPath(pts)+'" fill="none" stroke="'+color+'" stroke-width="'+(isTop4?'3.5':'2.5')+'" opacity="1"/>';
-    pts.forEach(function(p){svg+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="'+(isTop4?'3.5':'3')+'" fill="'+color+'" stroke="#0a0a0a" stroke-width="1"/>';});
+    svg+='<path d="'+smoothPath(pts)+'" fill="none" stroke="'+color+'" stroke-width="2.75" opacity="1"/>';
+    pts.forEach(function(p){svg+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="3" fill="'+color+'" stroke="#0a0a0a" stroke-width="1"/>';});
   });
   svg+='<\/svg>';
   var lastDate=dates[dates.length-1];
@@ -956,9 +947,7 @@ function drawEvolChart(){
   var legend='<div class="evol-legend">';
   rankedActive.forEach(function(u){
     var ni=nameList.indexOf(u.n),color=colors[ni%colors.length];
-    var medal=top4.indexOf(u.n);
-    var tag=medal===0?'🥇 ':medal===1?'🥈 ':medal===2?'🥉 ':medal===3?'4o ':'';
-    legend+='<div class="evol-leg-item"><span class="evol-leg-dot" style="background:'+color+'"><\/span>'+tag+u.n+' ('+u.pts+'pts)<\/div>';
+    legend+='<div class="evol-leg-item"><span class="evol-leg-dot" style="background:'+color+'"><\/span>'+u.n+' ('+u.pts+'pts)<\/div>';
   });
   legend+='<\/div>';
   cont.innerHTML=svg+legend;
@@ -966,7 +955,6 @@ function drawEvolChart(){
 function calcWinProbabilities(){
   var users=window._evolUsers||[];
   if(!users.length)return{};
-  // Total matches expected: 72 group + sum of KO sizes for rounds that are open/will be played
   var totalMatches=72;
   KO_ROUNDS.forEach(function(r){totalMatches+=KO_SIZES[r];});
   var stats=users.map(function(u){
@@ -975,15 +963,31 @@ function calcWinProbabilities(){
     GS.forEach(function(g){MU.forEach(function(p,mi){var real=rr.gr&&rr.gr[g]?rr.gr[g][mi]:null;if(real&&real.h!==null&&real.a!==null)played++;});});
     KO_ROUNDS.forEach(function(rnd){var n=KO_SIZES[rnd];for(var i=0;i<n;i++){var real=rr.ko&&rr.ko[rnd]?rr.ko[rnd][i]:null;if(real&&real.h!==null&&real.a!==null)played++;}});
     var rate=played>0?r.total/played:0;
-    var projected=r.total+rate*(totalMatches-played);
-    return{name:u.name,projected:projected};
+    var remaining=Math.max(0,totalMatches-played);
+    var projected=r.total+rate*remaining;
+    return{name:u.name,projected:projected,remaining:remaining,played:played};
   });
-  // Convert projected scores into relative win probability via softmax-like weighting
+  // Uncertainty grows with matches remaining: early in the tournament everyone still
+  // has a real shot, so we widen the spread (temperature) based on % of tournament left.
+  var pctRemaining=stats.length?stats[0].remaining/totalMatches:1;
   var maxProj=Math.max.apply(null,stats.map(function(s){return s.projected;}));
-  var weights=stats.map(function(s){return Math.exp((s.projected-maxProj)*0.35);});
+  var minProj=Math.min.apply(null,stats.map(function(s){return s.projected;}));
+  var range=Math.max(1,maxProj-minProj);
+  // temperature: higher = flatter distribution (more uncertainty). Scales with remaining tournament.
+  var temperature=range*(0.25+0.5*pctRemaining);
+  var weights=stats.map(function(s){return Math.exp((s.projected-maxProj)/temperature);});
   var sumW=weights.reduce(function(a,b){return a+b;},0);
+  // Floor: nobody shows literal 0% while the tournament isn't over
+  var floorPct=stats.length?Math.min(2,100/stats.length/3):0;
   var probs={};
-  stats.forEach(function(s,i){probs[s.name]=sumW>0?(weights[i]/sumW*100):0;});
+  var raw={};
+  stats.forEach(function(s,i){raw[s.name]=sumW>0?(weights[i]/sumW*100):0;});
+  var totalRaw=Object.values(raw).reduce(function(a,b){return a+b;},0)||1;
+  // Apply floor then renormalize so total stays 100%
+  var floored={};
+  stats.forEach(function(s){floored[s.name]=Math.max(floorPct,raw[s.name]);});
+  var totalFloored=Object.values(floored).reduce(function(a,b){return a+b;},0)||1;
+  stats.forEach(function(s){probs[s.name]=floored[s.name]/totalFloored*100;});
   return probs;
 }
 function renderEvolDetail(name){
