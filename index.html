@@ -138,7 +138,7 @@ h1 span{color:var(--gold);}
 .evol-chip.on{background:#1a2030;color:var(--text);}
 .evol-chip.top4{font-weight:700;}
 .evol-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;max-width:1100px;}
-.evol-leg-item{display:flex;align-items:center;gap:5px;font-size:11px;}
+.evol-leg-item{display:flex;align-items:center;gap:5px;font-size:13px;font-weight:600;}
 .evol-leg-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
 .evol-stat-banner{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:9px;background:var(--panel);border:1px solid var(--border);padding:11px 14px;margin:10px 0;}
 .evol-match{display:flex;align-items:center;padding:7px 10px;border-bottom:1px solid #1a2030;gap:6px;font-size:12px;}
@@ -791,17 +791,21 @@ async function renderRanking(){
   var h='<div class="rank-banner"><div class="pi"><div class="pilbl">Participantes<\/div><div class="pival" style="color:var(--text)">'+n+'<\/div><\/div><div class="pi"><div class="pilbl">Pozo<\/div><div class="pival" style="color:var(--gold)">'+CUR+total.toFixed(0)+'<\/div><\/div><div class="pi"><div class="pilbl">1er Lugar<\/div><div class="pival" style="color:var(--gold)">'+CUR+prizes.first.toFixed(0)+'<\/div><\/div><div class="pi"><div class="pilbl">2do Lugar<\/div><div class="pival" style="color:#9aa0aa">'+CUR+prizes.second.toFixed(0)+'<\/div><\/div><div class="pi"><div class="pilbl">3er Lugar<\/div><div class="pival" style="color:#a07040">'+CUR+prizes.third.toFixed(0)+'<\/div><\/div><div class="pi"><div class="pilbl">4to Lugar<\/div><div class="pival" style="color:var(--muted)">Recupera '+CUR+FEE+'<\/div><\/div><\/div>';
   if(!n){cont.innerHTML=h+'<div style="text-align:center;padding:24px;color:var(--muted);">Aun no hay participantes.<\/div>';return;}
 
-  // Horizontal bar chart
-  var maxPts=Math.max.apply(null,ranked.map(function(u){return u.pts;}))||1;
-  var barColors=evolColors();
-  h+='<div style="background:var(--panel);border:1px solid var(--border);padding:10px 12px;margin-bottom:12px;">';
-  ranked.forEach(function(u,i){
-    var pct=Math.max(2,Math.round(u.pts/maxPts*100));
-    var color=barColors[i%barColors.length];
-    h+='<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px;">';
-    h+='<span style="width:88px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;flex-shrink:0;">'+u.name+'<\/span>';
-    h+='<div style="flex:1;background:#1a2030;height:14px;position:relative;"><div style="height:100%;width:'+pct+'%;background:'+color+';"><\/div><\/div>';
-    h+='<span style="width:28px;text-align:right;color:var(--gold);font-weight:700;flex-shrink:0;">'+u.pts+'<\/span>';
+  // Vertical bar chart - only top 4 prize positions
+  var top4Rows=rows.filter(function(row){return row.pos<4;});
+  var maxPts=Math.max.apply(null,top4Rows.map(function(row){return row.u.pts;}))||1;
+  var podiumColors=['var(--gold)','#9aa0aa','#a07040','var(--muted)'];
+  h+='<div style="background:var(--panel);border:1px solid var(--border);padding:14px 12px 10px;margin-bottom:12px;display:flex;align-items:flex-end;justify-content:center;gap:10px;min-height:160px;">';
+  top4Rows.forEach(function(row){
+    var u=row.u,pos=row.pos;
+    var pct=Math.max(8,Math.round(u.pts/maxPts*100));
+    var color=podiumColors[pos];
+    var medal=['🥇','🥈','🥉','4'][pos];
+    h+='<div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;max-width:90px;">';
+    h+='<span style="font-family:\'Bebas Neue\',sans-serif;font-size:18px;color:'+color+';">'+u.pts+'<\/span>';
+    h+='<div style="width:100%;max-width:48px;background:#1a2030;height:110px;display:flex;align-items:flex-end;"><div style="width:100%;height:'+pct+'%;background:'+color+';"><\/div><\/div>';
+    h+='<span style="font-size:13px;">'+medal+'<\/span>';
+    h+='<span style="font-size:10px;font-weight:700;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:88px;">'+u.name+'<\/span>';
     h+='<\/div>';
   });
   h+='<\/div>';
@@ -821,18 +825,19 @@ async function renderRanking(){
       else if(diff<0)arrow='<span style="color:var(--red);font-size:10px;margin-left:4px;">&#9660;'+Math.abs(diff)+'<\/span>';
       else arrow='<span style="color:var(--muted);font-size:10px;margin-left:4px;">&#9644;<\/span>';
     }
-    var streak=streaks[u.name]||0;
-    var streakBadge=streak>=2?'<span style="font-size:9px;color:#ff8c1a;margin-left:4px;">&#128293;'+streak+'<\/span>':'';
+    var sk=streaks[u.name]||{win:0,exact:0};
+    var streakBadge='';
+    if(sk.exact>=2){streakBadge='<span style="font-size:9px;color:#c07820;margin-left:4px;border:1px solid #5a3a10;padding:1px 4px;">&#127919;'+sk.exact+'<\/span>';}
+    else if(sk.win>=2){streakBadge='<span style="font-size:9px;color:#ff8c1a;margin-left:4px;">&#128293;'+sk.win+'<\/span>';}
     h+='<tr><td style="font-family:\'Bebas Neue\',sans-serif;font-size:'+(span>1?'14':'20')+'px;color:'+col+';">'+posLabel+'<\/td><td style="font-weight:700;">'+u.name+arrow+streakBadge+'<\/td><td style="text-align:right;color:#4a9a6a;">'+u.grPts+'<\/td><td style="text-align:right;color:#4a6a9a;">'+u.koPts+'<\/td><td style="text-align:right;font-family:\'Bebas Neue\',sans-serif;font-size:20px;color:var(--gold);">'+u.pts+'<\/td><td style="text-align:right;color:'+col+';">'+prizeLabel+'<\/td><\/tr>';
   });
   h+='<\/tbody><\/table>';
   cont.innerHTML=h;
 }
 function computeStreaks(users){
-  // Build chronological list of all played matches (group + ko) with their date (ko has no exact date, treated as "latest")
+  // Build chronological list of all played matches with both winner-hit and exact-score flags
   var streaks={};
   users.forEach(function(u){
-    var seq=[]; // true = scored points, false = missed, in chronological order
     var dateMatches=[];
     GS.forEach(function(g){
       MU.forEach(function(p,mi){
@@ -842,15 +847,19 @@ function computeStreaks(users){
         var sm=SCHEDULE.find(function(m){return m.g===g&&((m.h===hn&&m.a===an)||(m.h===an&&m.a===hn));});
         var pred=u.scores&&u.scores[g]?u.scores[g][mi]:null;
         var scored=!!(pred&&pred.h!==null&&pred.a!==null&&((pred.h>pred.a?'h':pred.a>pred.h?'a':'d')===(real.h>real.a?'h':real.a>real.h?'a':'d')));
-        dateMatches.push({d:sm?sm.d:'9999',scored:scored});
+        var exact=!!(pred&&pred.h===real.h&&pred.a===real.a);
+        dateMatches.push({d:sm?sm.d:'9999',scored:scored,exact:exact});
       });
     });
     dateMatches.sort(function(a,b){return a.d<b.d?-1:a.d>b.d?1:0;});
-    var streak=0;
+    var winStreak=0,exactStreak=0;
     for(var i=dateMatches.length-1;i>=0;i--){
-      if(dateMatches[i].scored)streak++;else break;
+      if(dateMatches[i].scored)winStreak++;else break;
     }
-    streaks[u.name]=streak;
+    for(var j=dateMatches.length-1;j>=0;j--){
+      if(dateMatches[j].exact)exactStreak++;else break;
+    }
+    streaks[u.name]={win:winStreak,exact:exactStreak};
   });
   return streaks;
 }
@@ -975,7 +984,7 @@ function drawEvolChart(){
   var strongNames=anySelected?nameList.filter(function(n){return selected[n];}):nameList;
   var dimNames=anySelected?nameList.filter(function(n){return !selected[n];}):[];
 
-  var W=1000,H=480,padL=46,padR=16,padT=24,padB=44;
+  var W=1000,H=480,padL=58,padR=16,padT=24,padB=44;
   var maxPts=1;
   dates.forEach(function(d){nameList.forEach(function(n){var v=hist[d][n];if(v!==undefined&&v>maxPts)maxPts=v;});});
   maxPts=Math.ceil(maxPts*1.12)||1;
@@ -995,7 +1004,7 @@ function drawEvolChart(){
   for(var gl=0;gl<=4;gl++){
     var gv=Math.round(maxPts*gl/4),gy=yPos(gv);
     svg+='<line x1="'+padL+'" y1="'+gy+'" x2="'+(W-padR)+'" y2="'+gy+'" stroke="#1f2530" stroke-width="1"/>';
-    svg+='<text x="'+(padL-9)+'" y="'+(gy+5)+'" fill="#8a93a3" font-size="13" text-anchor="end">'+gv+'<\/text>';
+    svg+='<text x="'+(padL-9)+'" y="'+(gy+5)+'" fill="#aab2c0" font-size="17" font-weight="700" text-anchor="end">'+gv+'<\/text>';
   }
   dates.forEach(function(d,i){
     if(dates.length>10&&i%Math.ceil(dates.length/10)!==0&&i!==dates.length-1)return;
@@ -1021,7 +1030,7 @@ function drawEvolChart(){
   var legend='<div class="evol-legend">';
   rankedStrong.forEach(function(u){
     var ni=nameList.indexOf(u.n),color=colors[ni%colors.length];
-    legend+='<div class="evol-leg-item"><span class="evol-leg-dot" style="background:'+color+'"><\/span>'+u.n+' ('+u.pts+'pts)<\/div>';
+    legend+='<div class="evol-leg-item"><span class="evol-leg-dot" style="background:'+color+'"><\/span>'+u.n+' (<span style="color:var(--gold);font-weight:800;">'+u.pts+'pts<\/span>)<\/div>';
   });
   legend+='<\/div>';
   cont.innerHTML=svg+legend;
@@ -1475,6 +1484,8 @@ async function renderTodayBanner(){
   if(!CU||CU==='__adm__'){box.style.display='none';return;}
   var matches=getTodayMatches();
   var h='';
+  var allUsers=[];
+  try{allUsers=await getAllUsers();}catch(e){}
   if(matches.length){
     h+='<div class="today-banner-title">&#9917; Tus predicciones para hoy<\/div>';
     matches.forEach(function(match){
@@ -1488,21 +1499,51 @@ async function renderTodayBanner(){
       });
       var mid=pred?(pred.h+' - '+pred.a):'<span style="color:var(--muted);font-size:11px;">Sin predecir<\/span>';
       h+='<div class="today-match"><span class="today-mt" style="text-align:right;">'+match.hf+' '+match.h+'<\/span><span class="today-msc">'+mid+'<\/span><span class="today-mt">'+match.a+' '+match.af+'<\/span><\/div>';
+      // Majority trend across all participants for this match
+      if(allUsers.length){
+        var votes={h:0,a:0,d:0};
+        allUsers.forEach(function(u){
+          MU.forEach(function(p,mi2){
+            var hn2=TEAMS[g][p[0]].n,an2=TEAMS[g][p[1]].n;
+            if(!((hn2===match.h&&an2===match.a)||(hn2===match.a&&an2===match.h)))return;
+            var sc2=u.scores&&u.scores[g]?u.scores[g][mi2]:null;
+            if(!sc2||sc2.h===null||sc2.a===null)return;
+            var realH=hn2===match.h?sc2.h:sc2.a,realA=hn2===match.h?sc2.a:sc2.h;
+            if(realH>realA)votes.h++;else if(realA>realH)votes.a++;else votes.d++;
+          });
+        });
+        var totalVotes=votes.h+votes.a+votes.d;
+        if(totalVotes>0){
+          var winner=votes.h>=votes.a&&votes.h>=votes.d?'h':votes.a>=votes.d?'a':'d';
+          var winPct=Math.round((winner==='h'?votes.h:winner==='a'?votes.a:votes.d)/totalVotes*100);
+          var trendTxt=winner==='d'?'la mayoria ('+winPct+'%) cree en un empate':'la mayoria ('+winPct+'%) cree que gana '+(winner==='h'?match.h:match.a);
+          h+='<div style="font-size:10px;color:#8a93a3;padding:0 0 6px;margin-top:-2px;">&#128202; '+trendTxt+'<\/div>';
+        }
+      }
     });
   }
   // Momento destacado: computed across all participants based on real results so far
   try{
     await loadRR();
-    var users=await getAllUsers();
+    var users=allUsers.length?allUsers:await getAllUsers();
     if(users.length){
       var streaks=computeStreaks(users);
-      var topStreak=null;
+      var maxExact=0,maxWin=0;
       Object.keys(streaks).forEach(function(name){
-        if(streaks[name]>=2&&(!topStreak||streaks[name]>topStreak.streak))topStreak={name:name,streak:streaks[name]};
+        if(streaks[name].exact>maxExact)maxExact=streaks[name].exact;
+        if(streaks[name].win>maxWin)maxWin=streaks[name].win;
       });
       var highlight='';
-      if(topStreak){
-        highlight='&#128293; '+topStreak.name+' lleva '+topStreak.streak+' aciertos seguidos';
+      if(maxExact>=2){
+        var exactNames=Object.keys(streaks).filter(function(name){return streaks[name].exact===maxExact;});
+        var namesStr=exactNames.length>1?(exactNames.slice(0,-1).join(', ')+' y '+exactNames[exactNames.length-1]):exactNames[0];
+        var verb=exactNames.length>1?'llevan':'lleva';
+        highlight='&#127919; '+namesStr+' '+verb+' '+maxExact+' marcadores EXACTOS seguidos';
+      }else if(maxWin>=2){
+        var winNames=Object.keys(streaks).filter(function(name){return streaks[name].win===maxWin;});
+        var namesStr2=winNames.length>1?(winNames.slice(0,-1).join(', ')+' y '+winNames[winNames.length-1]):winNames[0];
+        var verb2=winNames.length>1?'llevan':'lleva';
+        highlight='&#128293; '+namesStr2+' '+verb2+' '+maxWin+' aciertos seguidos';
       }else{
         // Find last played group match and see how many got it right
         var dates=getPlayedDates(rr);
