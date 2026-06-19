@@ -2121,6 +2121,61 @@ async function renderPosiciones(){
     h+='<span class="r32-vs">vs<\/span>';
     h+='<div class="r32-side" style="text-align:right;justify-content:flex-end;">'+(bReady?((isThirdMatch&&isProjection?'<span style="font-size:8px;color:#c07820;margin-right:4px;">PROY<\/span>':'')+flagImg(m.b.flag)+' '+m.b.name):'<span style="color:var(--muted);font-size:10px;">'+m.b.lbl+'<\/span>')+'<\/div><\/div>';
   });
+
+  // ── Mejor Predictor de Tabla por Grupo ──
+  var users=await getAllUsers();
+  if(users.length){
+    h+='<div class="evol-msec-title">Mejor Predictor de Tabla por Grupo<\/div>';
+    h+='<div class="ibox" style="font-size:11px;">Compara el orden final (1-2-3-4) que cada participante predijo contra el orden real del grupo, contando cuantas posiciones exactas acerto (solo grupos con los 6 partidos jugados).<\/div>';
+    h+='<div class="pos-groups-grid">';
+    GS.forEach(function(g){
+      var st=standings[g];
+      var allPlayed=st.every(function(t){return t.pj===3;});
+      if(!allPlayed)return;
+      var realOrder=st.map(function(t){return t.n;}); // real 1st..4th team names
+      var predictions=users.map(function(u){
+        var s=cSt(g,u.scores||{});
+        var predOrder=s.order.map(function(idx){return TEAMS[g][idx].n;});
+        var matches=0;
+        for(var i=0;i<4;i++){if(predOrder[i]===realOrder[i])matches++;}
+        return{name:u.name,matches:matches};
+      });
+      var maxMatches=Math.max.apply(null,predictions.map(function(p){return p.matches;}));
+      var best=predictions.filter(function(p){return p.matches===maxMatches;});
+      h+='<div class="pos-group-card"><div class="pos-group-title">Grupo '+g+'<\/div>';
+      h+='<div style="font-size:11px;color:var(--muted);margin-bottom:4px;">Mejor'+(best.length>1?'es':'')+': <span style="color:#2a8a4c;font-weight:700;">'+best.map(function(p){return p.name;}).join(', ')+'<\/span> ('+maxMatches+'\/4 posiciones)<\/div>';
+      h+='<\/div>';
+    });
+    h+='<\/div>';
+
+    // ── Equipo Favorito de Cada Participante ──
+    h+='<div class="evol-msec-title">Equipo Favorito de Cada Participante<\/div>';
+    h+='<div class="ibox" style="font-size:11px;">El equipo que cada persona eligio mas veces como ganador en sus 72 predicciones de marcador de grupos.<\/div>';
+    h+='<div class="pos-group-card">';
+    users.forEach(function(u){
+      var counts={};
+      GS.forEach(function(g){
+        MU.forEach(function(p,mi){
+          var sc=u.scores&&u.scores[g]?u.scores[g][mi]:null;
+          if(!sc||sc.h===null||sc.a===null||sc.h===sc.a)return;
+          var winnerIdx=sc.h>sc.a?p[0]:p[1];
+          var winnerName=TEAMS[g][winnerIdx].n;
+          counts[winnerName]=(counts[winnerName]||0)+1;
+        });
+      });
+      var sorted=Object.keys(counts).sort(function(a,b){return counts[b]-counts[a];});
+      if(!sorted.length){
+        h+='<div class="pos-team-row"><span class="pos-team-name">'+u.name+'<\/span><span style="color:var(--muted);font-size:11px;">Sin predicciones<\/span><\/div>';
+        return;
+      }
+      var topTeam=sorted[0];
+      var topCount=counts[topTeam];
+      var teamFlag=getFlagByName(topTeam);
+      h+='<div class="pos-team-row"><span class="pos-team-name">'+u.name+'<\/span><span>'+flagImg(teamFlag)+'<\/span><span style="font-weight:700;">'+topTeam+'<\/span><span class="pos-team-pts">'+topCount+' veces<\/span><\/div>';
+    });
+    h+='<\/div>';
+  }
+
   cont.innerHTML=h;
 }
 async function renderTodayBanner(){
