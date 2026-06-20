@@ -512,6 +512,31 @@ function cSt(g,gr){
   });
   return{pts:pts,gd:gd,gf:gf,w:w,order:[0,1,2,3].sort(function(a,b){return pts[b]-pts[a]||gd[b]-gd[a]||gf[b]-gf[a]||w[b]-w[a]||a-b;})};
 }
+function calcQualStatus(g,gr){
+  // Returns array of 4 statuses: 'q' (mathematically qualified top2), 'e' (mathematically eliminated), or null (still undecided)
+  var s=cSt(g,gr);
+  var pts=s.pts;
+  var remaining=[0,0,0,0]; // matches left to play for each team (max 3 per team in group stage)
+  MU.forEach(function(p,mi){
+    var rs=gr[g]?gr[g][mi]:null;
+    if(rs&&rs.h!==null&&rs.a!==null)return;
+    remaining[p[0]]++;remaining[p[1]]++;
+  });
+  var maxPts=pts.map(function(p,i){return p+remaining[i]*3;}); // best case: win all remaining
+  var minPts=pts.slice(); // worst case: lose all remaining (pts stay the same)
+  var status=[null,null,null,null];
+  for(var i=0;i<4;i++){
+    // Eliminated: at least 2 others can reach >= my max points (tie-or-beat; goal diff could exclude me)
+    var othersMin=[0,1,2,3].filter(function(x){return x!==i;}).map(function(x){return minPts[x];});
+    var tiedOrBeatCount=othersMin.filter(function(op){return op>=maxPts[i];}).length;
+    if(tiedOrBeatCount>=2){status[i]='e';continue;}
+    // Qualified: at most 1 other can reach >= my min points (tie-or-beat)
+    var othersMax=[0,1,2,3].filter(function(x){return x!==i;}).map(function(x){return maxPts[x];});
+    var tiedOrBeatCount2=othersMax.filter(function(op){return op>=minPts[i];}).length;
+    if(tiedOrBeatCount2<=1){status[i]='q';continue;}
+  }
+  return status;
+}
 
 // Countdown
 function fmtCd(diff){
@@ -2016,9 +2041,9 @@ var R32_SCENARIOS=[
 ['ABCDEFGH','HGBCAFDE']
 ];
 function calcGroupStandings(g){
-  // Returns array of 4 teams with {n,f,pj,pg,pe,pp,gf,gc,dif,pts}, sorted by pts/dif/gf
+  // Returns array of 4 teams with {n,f,pj,pg,pe,pp,gf,gc,dif,pts,qstatus}, sorted by pts/dif/gf
   var teams=TEAMS[g];
-  var stats=teams.map(function(t){return{n:t.n,f:t.f,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,dif:0,pts:0};});
+  var stats=teams.map(function(t,idx){return{n:t.n,f:t.f,pj:0,pg:0,pe:0,pp:0,gf:0,gc:0,dif:0,pts:0,origIdx:idx};});
   MU.forEach(function(p,mi){
     var real=rr.gr&&rr.gr[g]?rr.gr[g][mi]:null;
     if(!real||real.h===null||real.a===null)return;
@@ -2031,6 +2056,8 @@ function calcGroupStandings(g){
     else{stats[hi].pe++;stats[ai].pe++;stats[hi].pts++;stats[ai].pts++;}
   });
   stats.forEach(function(s){s.dif=s.gf-s.gc;});
+  var qs=calcQualStatus(g,rr.gr||{});
+  stats.forEach(function(s){s.qstatus=qs[s.origIdx];});
   stats.sort(function(a,b){return b.pts-a.pts||b.dif-a.dif||b.gf-a.gf;});
   return stats;
 }
@@ -2051,7 +2078,9 @@ async function renderPosiciones(){
     h+='<table class="sttbl" style="font-size:11px;"><thead><tr><th><\/th><th>Equipo<\/th><th>PJ<\/th><th>GF<\/th><th>DG<\/th><th>Pts<\/th><\/tr><\/thead><tbody>';
     var bClasses=['b1','b2','b3','b4'],rcClasses=['q1','q2','q3',''];
     st.forEach(function(t,i){
-      h+='<tr class="'+rcClasses[i]+'"><td><span class="pbadge '+bClasses[i]+'">'+(i+1)+'<\/span><\/td><td><div class="tcell"><span>'+flagImg(t.f)+'<\/span>'+t.n+'<\/div><\/td><td>'+t.pj+'<\/td><td>'+t.gf+'<\/td><td>'+(t.dif>=0?'+':'')+t.dif+'<\/td><td class="stpts">'+t.pts+'<\/td><\/tr>';
+      var qBg=t.qstatus==='q'?'background:rgba(42,138,76,0.18);':t.qstatus==='e'?'background:rgba(192,57,43,0.15);':'';
+      var qTag=t.qstatus==='q'?' <span style="font-size:8px;color:#2a8a4c;border:1px solid #1a4a2c;padding:0 3px;">CLASIFICA<\/span>':t.qstatus==='e'?' <span style="font-size:8px;color:#e05050;border:1px solid #5a1a1a;padding:0 3px;">ELIMINADO<\/span>':'';
+      h+='<tr class="'+rcClasses[i]+'" style="'+qBg+'"><td><span class="pbadge '+bClasses[i]+'">'+(i+1)+'<\/span><\/td><td><div class="tcell"><span>'+flagImg(t.f)+'<\/span>'+t.n+qTag+'<\/div><\/td><td>'+t.pj+'<\/td><td>'+t.gf+'<\/td><td>'+(t.dif>=0?'+':'')+t.dif+'<\/td><td class="stpts">'+t.pts+'<\/td><\/tr>';
     });
     h+='<\/tbody><\/table><\/div>';
   });
