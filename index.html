@@ -491,6 +491,7 @@ var GR_PTS_WIN=1, GR_PTS_EXACT=3;
 
 // State
 var CU=null,adm=false,uLk=false,uCd='',uExt=false;
+var thirdOv=null; // override admin: grupo a colocar 8vo cuando hay empate exacto 8º/9º
 var grSc={};  // user group scores
 var koSc={};  // user ko scores per round {h,a} indexed
 var phases={};// admin phase config: {open:bool, teams:[32 team names for r32, etc]}
@@ -602,6 +603,24 @@ async function loadPhases(){
 async function loadRR(){
   var r=await stG('real_results');
   rr=r||{gr:{},ko:{}};
+  thirdOv=(await stG('third_override'))||null;
+}
+function applyThirdOverride(arr,ov){
+  // Solo actua si el 8vo y el 9no estan empatados EXACTOS (pts, dif, gf) y ov nombra al grupo del 9no.
+  if(!ov||arr.length<9)return arr;
+  var a=arr[7],b=arr[8];
+  if(a.pts!==b.pts||a.dif!==b.dif||a.gf!==b.gf)return arr; // no hay empate real en el borde -> se ignora
+  if(b.g!==ov)return arr;                                  // el override no corresponde al 9no actual
+  var copy=arr.slice();copy[7]=b;copy[8]=a;return copy;    // sube el 9no al 8vo lugar
+}
+function realThirdsRanked(){
+  // Terceros reales ordenados por criterio FIFA (pts, dif, gf), solo con partidos jugados. SIN override.
+  var thirds=GS.map(function(g){
+    var st=calcGroupStandings(g),t=st[2];
+    return t?{g:g,n:t.n,f:t.f,pts:t.pts,dif:t.dif,gf:t.gf,pj:t.pj}:null;
+  }).filter(function(x){return x&&x.pj>0;});
+  thirds.sort(function(a,b){return b.pts-a.pts||b.dif-a.dif||b.gf-a.gf;});
+  return thirds;
 }
 
 // Login
@@ -1342,6 +1361,29 @@ async function renderAdmin(){
   // Real results grupos
   h+='<div class="asec"><div class="asectitle">Resultados Reales — Grupos<\/div><div id="rr-gr-cont"><\/div><\/div>';
 
+  // --- Desempate de Terceros (8 / 9) ---
+  var rtArr=realThirdsRanked(); // sin override, para detectar el empate natural en el borde
+  h+='<div class="asec"><div class="asectitle">Desempate de Terceros (8&ordm;/9&ordm;)<\/div>';
+  if(rtArr.length<9){
+    h+='<div class="ibox">Aun no hay 9 terceros con partidos jugados; todavia no puede haber empate en el borde.<\/div>';
+    if(thirdOv)h+='<div style="font-size:12px;color:#c07820;">Override guardado: Grupo '+thirdOv+' (se aplicara solo si hay empate exacto 8&ordm;/9&ordm;). <button class="abtn" onclick="clearThirdOv()">Quitar<\/button><\/div>';
+  }else{
+    var t8=rtArr[7],t9=rtArr[8];
+    var tied=(t8.pts===t9.pts&&t8.dif===t9.dif&&t8.gf===t9.gf);
+    if(!tied){
+      h+='<div class="ibox">No hay empate exacto entre el 8&ordm; ('+t8.n+') y el 9&ordm; ('+t9.n+'). El override solo aplica cuando empatan en puntos, diferencia de gol y goles a favor.<\/div>';
+      if(thirdOv)h+='<div style="font-size:12px;color:#c07820;">Override guardado: Grupo '+thirdOv+' (ignorado mientras no haya empate). <button class="abtn" onclick="clearThirdOv()">Quitar<\/button><\/div>';
+    }else{
+      var active9=(thirdOv===t9.g);
+      h+='<div class="ibox">Empate exacto 8&ordm;/9&ordm;: <b>'+t8.n+'<\/b> (Gr.'+t8.g+') y <b>'+t9.n+'<\/b> (Gr.'+t9.g+') &mdash; '+t8.pts+'pts, DG '+(t8.dif>=0?'+':'')+t8.dif+', '+t8.gf+'GF. FIFA desempata por fair-play/sorteo (la app no lo calcula). Elige quien clasifica como 8&ordm;:<\/div>';
+      h+='<div style="display:flex;gap:7px;flex-wrap:wrap;">';
+      h+='<button class="abtn" style="'+(!active9?'border-color:#1a4a2c;color:#2a8a4c;background:#0d1a12;':'')+'" onclick="clearThirdOv()">'+flagImg(t8.f)+' '+t8.n+' (Gr.'+t8.g+')'+(!active9?' &#10003;':'')+'<\/button>';
+      h+='<button class="abtn" style="'+(active9?'border-color:#1a4a2c;color:#2a8a4c;background:#0d1a12;':'')+'" onclick="setThirdOv(\''+t9.g+'\')">'+flagImg(t9.f)+' '+t9.n+' (Gr.'+t9.g+')'+(active9?' &#10003;':'')+'<\/button>';
+      h+='<\/div>';
+    }
+  }
+  h+='<\/div>';
+
   // Participants
   h+='<div class="asec"><div class="asectitle">Participantes ('+users.length+')<\/div>';
   h+='<div style="display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end;margin-bottom:9px;"><div style="flex:1;min-width:150px;"><label class="ll">Nombre<\/label><input class="li" id="nn" type="text" placeholder="Ej: Juan Perez" maxlength="40" style="margin-bottom:0;" autocomplete="off"><\/div><div style="min-width:120px;"><label class="ll">Codigo (opcional)<\/label><input class="li" id="nc-custom" type="text" placeholder="Ej: SZ2026" maxlength="10" style="margin-bottom:0;letter-spacing:3px;" autocomplete="off"><\/div><button class="cbtn" onclick="createU()">Crear Codigo<\/button><\/div>';
@@ -1443,6 +1485,15 @@ async function saveAll(){
   await stS('phases',phases);
   await stS('real_results',{gr:rr.gr||{},ko:rr.ko||{},savedAt:new Date().toISOString()});
   var m=document.getElementById('save-msg');if(m){m.textContent='Guardado';setTimeout(function(){m.textContent='';},3000);}
+}
+async function setThirdOv(g){
+  await stS('third_override',g);thirdOv=g;
+  alert('Listo. El Grupo '+g+' clasificara como 8vo mejor tercero mientras siga el empate exacto 8/9.');
+  renderAdmin();
+}
+async function clearThirdOv(){
+  await stD('third_override');thirdOv=null;
+  renderAdmin();
 }
 
 function genCd(){var c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789',s='';for(var i=0;i<6;i++)s+=c[Math.floor(Math.random()*c.length)];return s;}
@@ -2104,12 +2155,8 @@ async function renderPosiciones(){
   function WF(g){return standings[g][0]?standings[g][0].f:'';}
   function R(g){return standings[g][1]?standings[g][1].n:null;}
   function RF(g){return standings[g][1]?standings[g][1].f:'';}
-  // Best third-placed teams ranking (8 of 12 advance)
-  var thirds=GS.map(function(g){
-    var t=standings[g][2];
-    return t?{g:g,n:t.n,f:t.f,pts:t.pts,dif:t.dif,gf:t.gf,pj:t.pj}:null;
-  }).filter(function(x){return x&&x.pj>0;});
-  thirds.sort(function(a,b){return b.pts-a.pts||b.dif-a.dif||b.gf-a.gf;});
+  // Best third-placed teams ranking (8 of 12 advance) — con override admin del 8/9 si aplica
+  var thirds=applyThirdOverride(realThirdsRanked(),thirdOv);
   h+='<div class="evol-msec-title">Mejores Terceros Lugares (8 de 12 avanzan)<\/div>';
   if(!thirds.length){
     h+='<div class="ibox">Aun no hay suficientes partidos jugados para calcular terceros lugares.<\/div>';
