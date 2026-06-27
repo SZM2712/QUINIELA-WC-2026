@@ -2246,17 +2246,19 @@ async function renderPosiciones(){
   }
   function bkSec(t){h+='<div style="font-family:\'Bebas Neue\',sans-serif;font-size:14px;letter-spacing:2px;color:var(--gold);margin:12px 0 6px;">'+t+'<\/div>';}
   // Banderas de los equipos candidatos (los que pueden salir de esa llave), desde los 16avos proyectados.
-  function bkCandFlags(idxs){var fl='';idxs.forEach(function(r){var m=r32[r];if(m){if(m.a&&m.a.flag)fl+=flagImg(m.a.flag,13);if(m.b&&m.b.flag)fl+=flagImg(m.b.flag,13);}});return fl?' <span style="display:inline-flex;gap:1px;vertical-align:middle;opacity:.92;">'+fl+'<\/span>':'';}
+  function bkCandFlags(idxs){var fl='';idxs.forEach(function(r){var m=r32[r];if(m){if(m.a&&m.a.flag)fl+=flagImg(m.a.flag,13);if(m.b&&m.b.flag)fl+=flagImg(m.b.flag,13);}});return fl?' <span style="display:inline-flex;flex-wrap:wrap;gap:1px;vertical-align:middle;opacity:.92;">'+fl+'<\/span>':'';}
+  function bkLeavesQF(k){return R16P[QFP[k][0]].concat(R16P[QFP[k][1]]);}
+  function bkLeavesSF(s){return bkLeavesQF(SFP[s][0]).concat(bkLeavesQF(SFP[s][1]));}
   bkSec('Octavos de Final');
   R16P.forEach(function(p,i){h+=bkSrcRow(89+i,'Gana M'+(73+p[0])+bkCandFlags([p[0]]),'Gana M'+(73+p[1])+bkCandFlags([p[1]]));});
   bkSec('Cuartos de Final');
   QFP.forEach(function(p,i){h+=bkSrcRow(97+i,'Gana M'+(89+p[0])+bkCandFlags(R16P[p[0]]),'Gana M'+(89+p[1])+bkCandFlags(R16P[p[1]]));});
   bkSec('Semifinales');
-  SFP.forEach(function(p,i){h+=bkSrcRow(101+i,'Gana M'+(97+p[0]),'Gana M'+(97+p[1]));});
+  SFP.forEach(function(p,i){h+=bkSrcRow(101+i,'Gana M'+(97+p[0])+bkCandFlags(bkLeavesQF(p[0])),'Gana M'+(97+p[1])+bkCandFlags(bkLeavesQF(p[1])));});
   bkSec('Final');
-  h+=bkSrcRow(104,'Gana M101','Gana M102');
+  h+=bkSrcRow(104,'Gana M101'+bkCandFlags(bkLeavesSF(0)),'Gana M102'+bkCandFlags(bkLeavesSF(1)));
   bkSec('Tercer Lugar');
-  h+=bkSrcRow(103,'Pierde M101','Pierde M102');
+  h+=bkSrcRow(103,'Pierde M101'+bkCandFlags(bkLeavesSF(0)),'Pierde M102'+bkCandFlags(bkLeavesSF(1)));
 
   // ── Mejor Predictor de Tabla por Grupo ──
   var users=await getAllUsers();
