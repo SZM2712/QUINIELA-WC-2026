@@ -2234,13 +2234,35 @@ async function renderPosiciones(){
     var firstLocked=!!(standings[g][0]&&standings[g][0].firstPlace);
     confMap[g]={first:firstLocked,second:firstLocked&&!!(standings[g][1]&&standings[g][1].qstatus==='q')};
   });
-  function slotGreen(lbl){
+  // Terceros YA clasificados (peor caso del 3ro vs. maximo alcanzable de los terceros rivales).
+  // No requiere grupos terminados. Un empate exacto en el borde 8/9 no se confirma.
+  var confThirds=(function(){
+    var info={};
+    GS.forEach(function(g){var st=standings[g];info[g]={st:st,done:st.every(function(t){return t.pj===3;}),maxP:st.map(function(t){return t.pts+3*(3-t.pj);})};});
+    function ceil3(g){var m=info[g].maxP.slice().sort(function(a,b){return b-a;});return m[2];}
+    var conf=new Set();
+    GS.forEach(function(g){
+      var gi=info[g],T=gi.st[2];if(!T)return;var Tf=T.pts;
+      var lockedTop3=gi.done?true:([0,1,3].filter(function(idx){return gi.maxP[idx]>=Tf;}).length<=2);
+      if(!lockedTop3)return;
+      var notBelow=0;
+      GS.forEach(function(h){
+        if(h===g)return;var hi=info[h];
+        if(gi.done&&hi.done){var H=hi.st[2];var below=(H.pts<Tf)||(H.pts===Tf&&(H.dif<T.dif||(H.dif===T.dif&&H.gf<T.gf)));if(!below)notBelow++;}
+        else{var hc=hi.done?hi.st[2].pts:ceil3(h);if(hc>=Tf)notBelow++;}
+      });
+      if(notBelow<=7)conf.add(T.n);
+    });
+    return conf;
+  })();
+  function slotGreen(lbl,nm){
     if(!lbl)return false;
     var m1=lbl.match(/^1ro Grupo ([A-L])$/);
     if(m1)return !!(confMap[m1[1]]&&confMap[m1[1]].first);
     var m2=lbl.match(/^2do Grupo ([A-L])$/);
     if(m2)return !!(confMap[m2[1]]&&confMap[m2[1]].second);
-    return false; // los slots de tercer lugar no se marcan aqui
+    if(lbl.indexOf('3ro')===0)return !!(nm&&confThirds.has(nm)); // tercero ya clasificado
+    return false;
   }
   var r32=[
     {n:73,a:{lbl:'2do Grupo A',name:R('A'),flag:RF('A')},b:{lbl:'2do Grupo B',name:R('B'),flag:RF('B')}},
@@ -2271,8 +2293,8 @@ async function renderPosiciones(){
     var aReady=!!m.a.name,bReady=!!m.b.name;
     var pending=!aReady||!bReady;
     var isThirdMatch=!!m.b.lbl&&m.b.lbl.indexOf('3ro')===0;
-    var aNm=(aReady&&slotGreen(m.a.lbl))?'<span style="color:#2a8a4c;font-weight:700;">'+m.a.name+'<\/span>':m.a.name;
-    var bNm=(bReady&&slotGreen(m.b.lbl))?'<span style="color:#2a8a4c;font-weight:700;">'+m.b.name+'<\/span>':m.b.name;
+    var aNm=(aReady&&slotGreen(m.a.lbl,m.a.name))?'<span style="color:#2a8a4c;font-weight:700;">'+m.a.name+'<\/span>':m.a.name;
+    var bNm=(bReady&&slotGreen(m.b.lbl,m.b.name))?'<span style="color:#2a8a4c;font-weight:700;">'+m.b.name+'<\/span>':m.b.name;
     h+='<div class="r32-match'+(pending?' pending':'')+'"><span class="r32-num">M'+m.n+'<\/span>';
     h+='<div class="r32-side">'+(aReady?(flagImg(m.a.flag)+' '+aNm):'<span style="color:var(--muted);font-size:10px;">'+m.a.lbl+'<\/span>')+'<\/div>';
     h+='<span class="r32-vs">vs<\/span>';
