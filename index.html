@@ -618,6 +618,37 @@ function realThirdsRanked(){
   return thirds;
 }
 
+// Estructura oficial FIFA de los 16avos (M73..M88). Cada slot: W<g>=1ro grupo g, R<g>=2do grupo g,
+// T<g>=tercero asignado al ganador del grupo g (via Anexo C). Mismo orden que el array r32 de Posiciones.
+var R32_STRUCT=[
+  ['RA','RB'],['WE','TE'],['WF','RC'],['WC','RF'],
+  ['WI','TI'],['RE','RI'],['WA','TA'],['WL','TL'],
+  ['WD','TD'],['WG','TG'],['RK','RL'],['WH','RJ'],
+  ['WB','TB'],['WJ','RH'],['WK','TK'],['RD','RG']
+];
+// Deriva los 32 equipos de 16avos desde los resultados de grupo (top-2 + mejores terceros + override 8/9).
+// Devuelve nombres en orden teams[matchIdx*2+slot] (slot 0=local,1=visitante). '' si aun no se conoce.
+function deriveR32Teams(){
+  var standings={};GS.forEach(function(g){standings[g]=calcGroupStandings(g);});
+  var thirds=applyThirdOverride(realThirdsRanked(),thirdOv);
+  var top8=thirds.slice(0,8).map(function(t){return t.g;});
+  var mapping=null;
+  if(top8.length===8){
+    var qkey=top8.slice().sort().join('');
+    var found=R32_SCENARIOS.find(function(s){return s[0]===qkey;});
+    if(found){var col=['A','B','D','E','G','I','K','L'];mapping={};col.forEach(function(wg,i){mapping[wg]=found[1][i];});}
+  }
+  function nameOf(code){
+    var t=code.charAt(0),g=code.slice(1);
+    if(t==='W')return standings[g][0]?standings[g][0].n:'';
+    if(t==='R')return standings[g][1]?standings[g][1].n:'';
+    if(t==='T'){if(!mapping)return '';var src=mapping[g];var x=standings[src]&&standings[src][2];return x?x.n:'';}
+    return '';
+  }
+  var teams=[];
+  R32_STRUCT.forEach(function(m){teams.push(nameOf(m[0]));teams.push(nameOf(m[1]));});
+  return teams;
+}
 // Login
 document.addEventListener('DOMContentLoaded',function(){
   tickCd();loadPool();renderMatchday();
@@ -1320,6 +1351,7 @@ async function renderAdmin(){
     if(!open){h+='<button class="cbtn" style="padding:4px 12px;font-size:10px;" onclick="openPhase(\''+r+'\')">Habilitar<\/button>';}
     else if(!locked){h+='<span style="color:#2a8a4c;font-size:11px;font-weight:700;">ABIERTA<\/span><button class="abtn" style="border-color:var(--red);color:var(--red);font-size:9px;" onclick="lockPhase(\''+r+'\')">Cerrar predicciones<\/button>';}
     else{h+='<span style="color:var(--muted);font-size:11px;">CERRADA<\/span><button class="abtn" style="border-color:#1a4a2c;color:#2a8a4c;font-size:9px;" onclick="reopenPhase(\''+r+'\')">Reabrir<\/button>';}
+    if(r==='r32'&&!locked){h+='<button class="abtn" style="border-color:#1a3a55;color:#5a90d0;font-size:9px;" onclick="autofillR32()" title="Llena los 16avos con los 1ros, 2dos y mejores terceros segun los resultados de grupo">Auto-llenar desde grupos<\/button>';}
     h+='<\/div><\/div>';
     if(open){
       h+='<div style="padding:8px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:5px;">';
@@ -1467,6 +1499,21 @@ async function setPhaseTeam(r,matchIdx,slot,name){
   if(!phases[r])phases[r]={open:true,teams:[]};
   if(!phases[r].teams)phases[r].teams=Array(KO_SIZES[r]*2).fill('');
   phases[r].teams[matchIdx*2+slot]=name;
+}
+async function autofillR32(){
+  var teams=deriveR32Teams();
+  var faltan=teams.filter(function(n){return !n;}).length;
+  var allDone=GS.every(function(g){var st=calcGroupStandings(g);return st[2]&&st[2].pj===3;});
+  if(faltan>0||!allDone){
+    var msg=!allDone?'Aun no terminan todos los partidos de grupo, asi que algunos cruces (sobre todo los de mejores terceros) son una PROYECCION y pueden cambiar.':('Faltan '+faltan+' equipos por definir.');
+    if(!confirm(msg+'\n\nSe llenaran los 16avos que ya se conocen. Puedes volver a presionar el boton cuando haya mas resultados. Continuar?'))return;
+  }
+  if(!phases['r32'])phases['r32']={open:true};
+  phases['r32'].teams=teams;
+  await stS('phases',phases);
+  renderAdmin();
+  var ok=teams.filter(function(n){return n;}).length;
+  alert('16avos auto-llenados desde los grupos: '+ok+'/32 equipos colocados'+(faltan>0?' ('+faltan+' por definir).':'.'));
 }
 async function saveGrResults(){
   await stS('real_results',{gr:rr.gr||{},ko:rr.ko||{},savedAt:new Date().toISOString()});
