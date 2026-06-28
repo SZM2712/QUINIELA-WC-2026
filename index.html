@@ -90,6 +90,11 @@ h1 span{color:var(--gold);}
 .ko-team-lbl{flex:1;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
 .ko-team-lbl.r{text-align:right;}
 .ko-winner-row{padding:4px 10px;background:#0a1208;border-top:1px solid #1a3a22;font-size:10px;color:#2a8a4c;font-weight:700;text-align:center;}
+.ko-pen-row{align-items:center;gap:6px;padding:5px 10px;background:#120e08;border-top:1px solid #3a2e16;font-size:10px;}
+.ko-pen-lbl{color:#c0a050;font-weight:700;letter-spacing:1px;text-transform:uppercase;font-size:9px;}
+.ko-pen-btn{flex:1;padding:4px 6px;background:#1a1408;border:1px solid #3a2e16;color:var(--text);font-size:10px;border-radius:4px;cursor:pointer;}
+.ko-pen-btn.sel{background:#3a2e10;border-color:#c0a050;color:#f0d890;font-weight:700;}
+.ko-pen-btn:disabled{opacity:.5;cursor:default;}
 .rank-banner{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:9px;background:linear-gradient(135deg,#0d1a12,#0a1208);border:1px solid #1a3a22;padding:11px 14px;margin-bottom:13px;max-width:1100px;margin-left:auto;margin-right:auto;position:relative;}
 .rank-banner::before{content:none;}
 .pi{text-align:center;}.pilbl{font-size:9px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:2px;}
@@ -589,7 +594,7 @@ async function doSave(){
 }
 function restoreUser(s){
   if(s.scores)GS.forEach(function(g){if(s.scores[g])s.scores[g].forEach(function(r,i){if(r)grSc[g][i]={h:r.h!=null?r.h:null,a:r.a!=null?r.a:null};});});
-  if(s.koSc)KO_ROUNDS.forEach(function(r){if(s.koSc[r])s.koSc[r].forEach(function(k,i){if(koSc[r][i]&&k)koSc[r][i]={h:k.h!=null?k.h:null,a:k.a!=null?k.a:null};});});
+  if(s.koSc)KO_ROUNDS.forEach(function(r){if(s.koSc[r])s.koSc[r].forEach(function(k,i){if(koSc[r][i]&&k)koSc[r][i]={h:k.h!=null?k.h:null,a:k.a!=null?k.a:null,pen:k.pen||null};});});
 }
 async function loadPhases(){
   var p=await stG('phases');
@@ -794,7 +799,11 @@ function renderElim(){
         grid+='<div class="ko-vs">VS<\/div>';
         grid+='<div class="mcteam"><div class="mcfl">'+(aTeam?flagImg(aTeam.f,28):'?')+'<\/div><div class="mcnm">'+(aTeam?aTeam.n:'TBD')+'<\/div><\/div><\/div>';
         grid+='<div class="ko-score-row"><div class="ko-team-lbl">'+(hTeam?hTeam.n:'Local')+'<\/div><div class="sbox"><input id="'+hid+'" type="number" class="sinput'+(sc.h!==null?' filled':'')+'" min="0" max="99" placeholder="-"'+(dis?' disabled':'')+' oninput="setKoSc(\''+r+'\','+i+',\'h\',this.value)"><span class="ssep">:<\/span><input id="'+aid+'" type="number" class="sinput'+(sc.a!==null?' filled':'')+'" min="0" max="99" placeholder="-"'+(dis?' disabled':'')+' oninput="setKoSc(\''+r+'\','+i+',\'a\',this.value)"><\/div><div class="ko-team-lbl r">'+(aTeam?aTeam.n:'Visitante')+'<\/div><\/div>';
-        if(sc.h!==null&&sc.a!==null){var w=sc.h>sc.a?hTeam:sc.a>sc.h?aTeam:null;grid+='<div class="ko-winner-row">'+(w?'Gana: '+flagImg(w.f)+' '+w.n:'Empate — elige penales')+'<\/div>';}
+        if(sc.h!==null&&sc.a!==null){var w=sc.h>sc.a?hTeam:sc.a>sc.h?aTeam:null;grid+='<div class="ko-winner-row">'+(w?'Gana: '+flagImg(w.f)+' '+w.n:'Empate \u2014 elige el ganador en penales (+1)')+'<\/div>';}
+        var isDraw=(sc.h!==null&&sc.a!==null&&sc.h===sc.a);
+        grid+='<div id="koPen'+r+'m'+i+'" class="ko-pen-row" style="display:'+(isDraw?'flex':'none')+';"><span class="ko-pen-lbl">Penales:<\/span>'+
+          '<button type="button" id="koPen'+r+'m'+i+'h" class="ko-pen-btn'+(sc.pen==='h'?' sel':'')+'"'+(dis?' disabled':'')+' onclick="setKoPen(\''+r+'\','+i+',\'h\')">'+(hTeam?hTeam.n:'Local')+'<\/button>'+
+          '<button type="button" id="koPen'+r+'m'+i+'a" class="ko-pen-btn'+(sc.pen==='a'?' sel':'')+'"'+(dis?' disabled':'')+' onclick="setKoPen(\''+r+'\','+i+',\'a\')">'+(aTeam?aTeam.n:'Visitante')+'<\/button><\/div>';
         grid+='<\/div>';
       }
       grid+='<\/div>';
@@ -816,7 +825,22 @@ function setKoSc(r,i,side,val){
   var v=val===''?null:Math.max(0,parseInt(val)||0);
   if(!koSc[r])koSc[r]=Array(KO_SIZES[r]).fill(null).map(function(){return{h:null,a:null};});
   if(!koSc[r][i])koSc[r][i]={h:null,a:null};
-  koSc[r][i][side]=v;sched();
+  koSc[r][i][side]=v;updateKoPen(r,i);sched();
+}
+function setKoPen(r,i,side){
+  var ph=phases[r];if(!ph||!ph.open||ph.locked)return;
+  if(!koSc[r])koSc[r]=Array(KO_SIZES[r]).fill(null).map(function(){return{h:null,a:null};});
+  if(!koSc[r][i])koSc[r][i]={h:null,a:null};
+  koSc[r][i].pen=side;updateKoPen(r,i);sched();
+}
+function updateKoPen(r,i){ // muestra/oculta el selector de penales segun si el marcador es empate
+  var sc=koSc[r]&&koSc[r][i]?koSc[r][i]:{};
+  var draw=(sc.h!==null&&sc.a!==null&&sc.h===sc.a);
+  if(!draw&&sc.pen)sc.pen=null;
+  var box=document.getElementById('koPen'+r+'m'+i);if(box)box.style.display=draw?'flex':'none';
+  var bh=document.getElementById('koPen'+r+'m'+i+'h'),ba=document.getElementById('koPen'+r+'m'+i+'a');
+  if(bh)bh.className='ko-pen-btn'+(sc.pen==='h'?' sel':'');
+  if(ba)ba.className='ko-pen-btn'+(sc.pen==='a'?' sel':'');
 }
 function getFlagByName(name){
   var all=Object.values(TEAMS).flat();
@@ -858,6 +882,7 @@ function calcUserPoints(u,rrData){
         var realW=real.h>real.a?'h':real.a>real.h?'a':'draw';
         if(predW===realW)koPts+=KO_PTS_WIN;
         if(pred.h===real.h&&pred.a===real.a)koPts+=KO_PTS_EXACT;
+        if(predW==='draw'&&realW==='draw'&&pred.pen&&real.pen&&pred.pen===real.pen)koPts+=1; // +1: acerto el empate y el ganador en penales
       }
     });
   }
@@ -1017,6 +1042,7 @@ function calcUserPointsUpTo(u,rrData,cutoffDate){
         var realW=real.h>real.a?'h':real.a>real.h?'a':'draw';
         if(predW===realW)koPts+=KO_PTS_WIN;
         if(pred.h===real.h&&pred.a===real.a)koPts+=KO_PTS_EXACT;
+        if(predW==='draw'&&realW==='draw'&&pred.pen&&real.pen&&pred.pen===real.pen)koPts+=1; // +1: acerto el empate y el ganador en penales
       }
     });
   }
@@ -1375,7 +1401,11 @@ async function renderAdmin(){
         var aN=ph.teams&&ph.teams[j*2+1]?ph.teams[j*2+1]:'?';
         var rrm=rr.ko&&rr.ko[r]?rr.ko[r][j]:null;
         var rhid='rko'+r+'m'+j+'h',raid='rko'+r+'m'+j+'a';
-        h+='<div style="background:var(--dark3);border:1px solid var(--border);padding:6px;font-size:10px;"><div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;"><span>'+getFlagByName(hN)+' '+hN+'<\/span><div class="sbox" style="margin:0 4px;"><input id="'+rhid+'" type="number" class="sinput'+(rrm&&rrm.h!==null?' filled':'')+'" min="0" max="99" placeholder="-" oninput="setRRKo(\''+r+'\','+j+',\'h\',this.value)"><span class="ssep">:<\/span><input id="'+raid+'" type="number" class="sinput'+(rrm&&rrm.a!==null?' filled':'')+'" min="0" max="99" placeholder="-" oninput="setRRKo(\''+r+'\','+j+',\'a\',this.value)"><\/div><span>'+aN+' '+getFlagByName(aN)+'<\/span><\/div><\/div>';
+        var rDraw=(rrm&&rrm.h!==null&&rrm.a!==null&&rrm.h===rrm.a);
+        var penHtml='<div id="rkoPen'+r+'m'+j+'" class="ko-pen-row" style="display:'+(rDraw?'flex':'none')+';margin-top:4px;"><span class="ko-pen-lbl">Penales:<\/span>'+
+          '<button type="button" id="rkoPen'+r+'m'+j+'h" class="ko-pen-btn'+(rrm&&rrm.pen==='h'?' sel':'')+'" onclick="setRRKoPen(\''+r+'\','+j+',\'h\')">'+hN+'<\/button>'+
+          '<button type="button" id="rkoPen'+r+'m'+j+'a" class="ko-pen-btn'+(rrm&&rrm.pen==='a'?' sel':'')+'" onclick="setRRKoPen(\''+r+'\','+j+',\'a\')">'+aN+'<\/button><\/div>';
+        h+='<div style="background:var(--dark3);border:1px solid var(--border);padding:6px;font-size:10px;"><div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;"><span>'+getFlagByName(hN)+' '+hN+'<\/span><div class="sbox" style="margin:0 4px;"><input id="'+rhid+'" type="number" class="sinput'+(rrm&&rrm.h!==null?' filled':'')+'" min="0" max="99" placeholder="-" oninput="setRRKo(\''+r+'\','+j+',\'h\',this.value)"><span class="ssep">:<\/span><input id="'+raid+'" type="number" class="sinput'+(rrm&&rrm.a!==null?' filled':'')+'" min="0" max="99" placeholder="-" oninput="setRRKo(\''+r+'\','+j+',\'a\',this.value)"><\/div><span>'+aN+' '+getFlagByName(aN)+'<\/span><\/div>'+penHtml+'<\/div>';
       }
       h+='<\/div><\/div>';
     }
@@ -1477,7 +1507,21 @@ function setRRKo(r,i,side,val){
   var v=val===''?null:Math.max(0,parseInt(val)||0);
   if(!rr.ko)rr.ko={};if(!rr.ko[r])rr.ko[r]=Array(KO_SIZES[r]).fill(null).map(function(){return{h:null,a:null};});
   if(!rr.ko[r][i])rr.ko[r][i]={h:null,a:null};
-  rr.ko[r][i][side]=v;
+  rr.ko[r][i][side]=v;updateRRKoPen(r,i);
+}
+function setRRKoPen(r,i,side){
+  if(!rr.ko)rr.ko={};if(!rr.ko[r])rr.ko[r]=Array(KO_SIZES[r]).fill(null).map(function(){return{h:null,a:null};});
+  if(!rr.ko[r][i])rr.ko[r][i]={h:null,a:null};
+  rr.ko[r][i].pen=side;updateRRKoPen(r,i);
+}
+function updateRRKoPen(r,i){ // muestra el selector de penales real solo si el resultado es empate
+  var m=rr.ko&&rr.ko[r]?rr.ko[r][i]:null;
+  var draw=(m&&m.h!==null&&m.a!==null&&m.h===m.a);
+  if(m&&!draw&&m.pen)m.pen=null;
+  var box=document.getElementById('rkoPen'+r+'m'+i);if(box)box.style.display=draw?'flex':'none';
+  var bh=document.getElementById('rkoPen'+r+'m'+i+'h'),ba=document.getElementById('rkoPen'+r+'m'+i+'a');
+  if(bh)bh.className='ko-pen-btn'+(m&&m.pen==='h'?' sel':'');
+  if(ba)ba.className='ko-pen-btn'+(m&&m.pen==='a'?' sel':'');
 }
 async function openPhase(r){
   if(!phases[r])phases[r]={};
