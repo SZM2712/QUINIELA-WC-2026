@@ -1381,8 +1381,10 @@ async function renderAdmin(){
     if(r==='r32'&&!locked){h+='<button class="abtn" style="border-color:#1a3a55;color:#5a90d0;font-size:9px;" onclick="autofillR32()" title="Llena los 16avos con los 1ros, 2dos y mejores terceros segun los resultados de grupo">Auto-llenar desde grupos<\/button>';}
     var hasTeams=ph.teams&&ph.teams.some(function(x){return x;});
     if(hasTeams){h+='<button class="abtn" style="border-color:#3a3520;color:#c0b060;font-size:9px;" onclick="shareRoundMsg(\''+r+'\')" title="Genera un mensaje con los partidos de esta ronda para compartir en el grupo">Generar aviso<\/button>';}
+    if(open){h+='<button class="abtn" style="border-color:#26304a;color:#9aa6c8;font-size:9px;" onclick="checkPhaseCompletion(\''+r+'\')" title="Ver quien ya lleno esta ronda y quien falta">Ver quien falta<\/button>';}
     h+='<\/div><\/div>';
     if(open){
+      h+='<div id="compPanel'+r+'" style="padding:0 8px;"><\/div>';
       h+='<div style="padding:8px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:5px;">';
       for(var i=0;i<n;i++){
         var hName=ph.teams&&ph.teams[i*2]?ph.teams[i*2]:'';
@@ -1574,6 +1576,39 @@ function shareRoundMsg(r){
   if(navigator.clipboard&&navigator.clipboard.writeText){
     navigator.clipboard.writeText(msg).then(function(){alert('Mensaje copiado. P\u00e9galo en el grupo de WhatsApp.');},function(){alert('Mensaje generado abajo: selecci\u00f3nalo y c\u00f3pialo.');});
   }else{alert('Mensaje generado abajo: selecci\u00f3nalo y c\u00f3pialo.');}
+}
+// Revisa qui\u00e9n complet\u00f3 las predicciones de la ronda r y qui\u00e9n falta.
+async function checkPhaseCompletion(r){
+  var panel=document.getElementById('compPanel'+r);if(!panel)return;
+  panel.innerHTML='<div style="color:var(--muted);font-size:11px;padding:6px 0;">Cargando participantes...<\/div>';
+  var users;try{users=await getAllUsers();}catch(e){panel.innerHTML='<div style="color:var(--red);font-size:11px;padding:6px 0;">No se pudieron cargar los participantes.<\/div>';return;}
+  var n=KO_SIZES[r],done=[],partial=[];
+  users.forEach(function(u){
+    var ko=u.koSc&&u.koSc[r]?u.koSc[r]:[];
+    var filled=0,drawNoPen=0;
+    for(var i=0;i<n;i++){var m=ko[i];if(m&&m.h!=null&&m.a!=null){filled++;if(m.h===m.a&&!m.pen)drawNoPen++;}}
+    if(filled>=n&&drawNoPen===0)done.push(u.name);
+    else partial.push({name:u.name,filled:filled,drawNoPen:drawNoPen});
+  });
+  window._missing=window._missing||{};window._missing[r]=partial.map(function(p){return p.name;});
+  var html='<div style="font-size:11px;margin:6px 0;"><b style="color:#2a8a4c;">'+done.length+'<\/b> completaron / <b style="color:#c07820;">'+partial.length+'<\/b> faltan <span style="color:var(--muted);">('+users.length+' participantes)<\/span>';
+  html+=' <button class="abtn" style="border-color:#3a3520;color:#c0b060;font-size:9px;margin-left:6px;" onclick="remindPhase(\''+r+'\')">Generar recordatorio<\/button><\/div>';
+  if(partial.length){
+    html+='<div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px;">';
+    partial.forEach(function(p){html+='<span style="background:#1a1408;border:1px solid #3a2e16;border-radius:4px;padding:2px 6px;font-size:10px;">'+p.name+' <span style="color:var(--muted);">('+p.filled+'/'+n+(p.drawNoPen?', faltan penales':'')+')<\/span><\/span>';});
+    html+='<\/div>';
+  }else{html+='<div style="font-size:11px;color:#2a8a4c;margin-bottom:6px;">\u00a1Todos completaron esta ronda! \u2705<\/div>';}
+  if(done.length)html+='<div style="font-size:10px;color:var(--muted);">Listos: '+done.join(', ')+'<\/div>';
+  panel.innerHTML=html;
+}
+// Arma un recordatorio para los que faltan en la ronda r.
+function remindPhase(r){
+  var miss=(window._missing&&window._missing[r])||[];
+  var url=location.origin+location.pathname,msg;
+  if(!miss.length){msg='\u2705 \u00a1Todos completaron sus predicciones de '+(KO_NAMES[r]||r)+'! \ud83c\udf89';}
+  else{msg='\u23f0 RECORDATORIO \u2014 '+(KO_NAMES[r]||r).toUpperCase()+'\n\nFaltan por llenar sus predicciones:\n'+miss.map(function(nm){return '\u2022 '+nm;}).join('\n')+'\n\nEntren a la app antes del primer partido \ud83d\udc47\n\ud83d\udc49 '+url;}
+  var ta=document.getElementById('shareMsgBox');if(ta){ta.value=msg;ta.style.display='block';ta.focus();ta.select();}
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(msg).then(function(){alert('Recordatorio copiado. P\u00e9galo en el grupo.');},function(){alert('Recordatorio generado abajo: c\u00f3pialo.');});}else{alert('Recordatorio generado abajo: c\u00f3pialo.');}
 }
 async function saveGrResults(){
   await stS('real_results',{gr:rr.gr||{},ko:rr.ko||{},savedAt:new Date().toISOString()});
