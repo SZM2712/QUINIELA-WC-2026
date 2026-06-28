@@ -359,6 +359,26 @@ var SCHEDULE=[
   {d:'2026-06-27',et:'15:00',h:'Panama',hf:'pa',a:'Inglaterra',af:'gb-eng',v:'MetLife, Nueva York',g:'L'},
   {d:'2026-06-27',et:'15:00',h:'Croacia',hf:'hr',a:'Ghana',af:'gh',v:'Lincoln, Philadelphia',g:'L'}
 ];
+// Calendario de eliminatorias (hora de Guatemala, UTC-6). r/i = ronda e indice para buscar el resultado real.
+// Orden local/visitante = orden de slot del bracket (M73..M88).
+var KO_SCHEDULE=[
+  {d:'2026-06-28',et:'13:00',r:'r32',i:0, h:'Sudafrica',hf:'za',a:'Canada',af:'ca',v:'SoFi, Los Angeles'},
+  {d:'2026-06-29',et:'11:00',r:'r32',i:3, h:'Brasil',hf:'br',a:'Japon',af:'jp',v:'NRG, Houston'},
+  {d:'2026-06-29',et:'14:30',r:'r32',i:1, h:'Alemania',hf:'de',a:'Paraguay',af:'py',v:'Gillette, Boston'},
+  {d:'2026-06-29',et:'19:00',r:'r32',i:2, h:'Paises Bajos',hf:'nl',a:'Marruecos',af:'ma',v:'BBVA, Monterrey'},
+  {d:'2026-06-30',et:'11:00',r:'r32',i:5, h:'Costa de Marfil',hf:'ci',a:'Noruega',af:'no',v:'AT&T, Dallas'},
+  {d:'2026-06-30',et:'15:00',r:'r32',i:4, h:'Francia',hf:'fr',a:'Suecia',af:'se',v:'MetLife, Nueva York'},
+  {d:'2026-06-30',et:'19:00',r:'r32',i:6, h:'Mexico',hf:'mx',a:'Ecuador',af:'ec',v:'Azteca, Cd. Mexico'},
+  {d:'2026-07-01',et:'10:00',r:'r32',i:7, h:'Inglaterra',hf:'gb-eng',a:'RD del Congo',af:'cd',v:'MBenz, Atlanta'},
+  {d:'2026-07-01',et:'14:00',r:'r32',i:9, h:'Belgica',hf:'be',a:'Senegal',af:'sn',v:'Lumen, Seattle'},
+  {d:'2026-07-01',et:'18:00',r:'r32',i:8, h:'EE.UU.',hf:'us',a:'Bosnia y Herz.',af:'ba',v:'Levis, San Francisco'},
+  {d:'2026-07-02',et:'13:00',r:'r32',i:11,h:'Espana',hf:'es',a:'Austria',af:'at',v:'SoFi, Los Angeles'},
+  {d:'2026-07-02',et:'17:00',r:'r32',i:10,h:'Portugal',hf:'pt',a:'Croacia',af:'hr',v:'BMO, Toronto'},
+  {d:'2026-07-02',et:'21:00',r:'r32',i:12,h:'Suiza',hf:'ch',a:'Argelia',af:'dz',v:'BC Place, Vancouver'},
+  {d:'2026-07-03',et:'12:00',r:'r32',i:15,h:'Australia',hf:'au',a:'Egipto',af:'eg',v:'AT&T, Dallas'},
+  {d:'2026-07-03',et:'16:00',r:'r32',i:13,h:'Argentina',hf:'ar',a:'Cabo Verde',af:'cv',v:'Hard Rock, Miami'},
+  {d:'2026-07-03',et:'19:30',r:'r32',i:14,h:'Colombia',hf:'co',a:'Ghana',af:'gh',v:'Arrowhead, Kansas City'}
+];
 function getTodayMatches(){
   // Get today's date in Guatemala (UTC-6)
   var now=new Date();
@@ -368,19 +388,26 @@ function getTodayMatches(){
   var today=y+'-'+m+'-'+d;
   return SCHEDULE.filter(function(m){return m.d===today;});
 }
+function getTodayKO(){
+  var now=new Date(),etNow=new Date(now.getTime()+(-6*60)*60000);
+  var y=etNow.getUTCFullYear(),m=('0'+(etNow.getUTCMonth()+1)).slice(-2),d=('0'+etNow.getUTCDate()).slice(-2);
+  var today=y+'-'+m+'-'+d;
+  return KO_SCHEDULE.filter(function(x){return x.d===today;});
+}
 async function renderMatchday(){
   var cont=document.getElementById('matchday');if(!cont)return;
-  var matches=getTodayMatches();
-  if(!matches.length){
+  var matches=getTodayMatches(),koToday=getTodayKO();
+  if(!matches.length&&!koToday.length){
     var now=new Date(),start2=new Date('2026-06-11T00:00:00-04:00'),end2=new Date('2026-07-19T23:59:00-04:00');
     if(now<start2)cont.innerHTML='<div style="font-size:10px;color:var(--muted);text-align:center;">El torneo comienza el 11 de junio<\/div>';
     else if(now>end2)cont.innerHTML='<div style="font-size:10px;color:var(--muted);text-align:center;">El torneo ha concluido<\/div>';
-    else cont.innerHTML='<div style="font-size:10px;color:var(--muted);text-align:center;">No hay partidos de grupos hoy<\/div>';
+    else cont.innerHTML='<div style="font-size:10px;color:var(--muted);text-align:center;">No hay partidos hoy<\/div>';
     return;
   }
   var rrData=null;
   try{rrData=await stG('real_results');}catch(e){}
   var grR=rrData&&rrData.gr?rrData.gr:{};
+  var grRko=rrData&&rrData.ko?rrData.ko:{};
   var h='<div style="font-size:9px;letter-spacing:2px;color:var(--gold);text-transform:uppercase;margin-bottom:6px;text-align:center;">Partidos de hoy<\/div>';
   matches.forEach(function(match){
     var result=null;
@@ -399,6 +426,17 @@ async function renderMatchday(){
     h+='<div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:600;">';
     h+='<span style="flex:1;text-align:right;">'+flagImg(match.hf)+' '+match.h+'<\/span>'+mid+'<span style="flex:1;">'+match.a+' '+flagImg(match.af)+'<\/span>';
     h+='<\/div><div style="font-size:9px;color:var(--muted);text-align:center;">Gr.'+match.g+' &middot; '+match.v+'<\/div><\/div>';
+  });
+  koToday.forEach(function(match){
+    var result=null,rk=grRko[match.r]?grRko[match.r][match.i]:null;
+    if(rk&&rk.h!==null&&rk.a!==null)result={h:rk.h,a:rk.a};
+    var mid=result
+      ?'<span style="padding:0 6px;font-family:\'Bebas Neue\',sans-serif;font-size:22px;color:var(--gold);">'+result.h+' - '+result.a+'<\/span>'
+      :'<span style="padding:0 8px;color:var(--muted);font-size:14px;">'+match.et+' GT<\/span>';
+    h+='<div style="padding:5px 0;border-bottom:1px solid #1a2030;">';
+    h+='<div style="display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:600;">';
+    h+='<span style="flex:1;text-align:right;">'+flagImg(match.hf)+' '+match.h+'<\/span>'+mid+'<span style="flex:1;">'+match.a+' '+flagImg(match.af)+'<\/span>';
+    h+='<\/div><div style="font-size:9px;color:var(--gold);text-align:center;">'+(KO_NAMES[match.r]||'Eliminatoria')+' &middot; '+match.v+'<\/div><\/div>';
   });
   cont.innerHTML=h;
   setTimeout(renderMatchday,60000);
