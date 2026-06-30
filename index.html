@@ -239,7 +239,7 @@ h1 span{color:var(--gold);}
   </div>
   <div id="tab-evol" class="view">
     <div style="max-width:1100px;margin:0 auto;padding:10px 0;">
-      <div class="ibox">Evolucion de puntos totales por dia. Toca chips para elegir quien se muestra en la grafica y el detalle de abajo (sin selecciones, se muestran todos en la grafica sin detalle).</div>
+      <div class="ibox">Evolucion de puntos totales por dia. Las lineas punteadas marcan el inicio de cada fase. Toca chips para elegir quien se muestra en la grafica y el detalle de abajo (sin selecciones, se muestran todos en la grafica sin detalle).</div>
       <div id="evol-cont"><div style="text-align:center;padding:20px;color:var(--muted);">Cargando...</div></div>
       <div style="margin-top:14px;">
         <label class="ll">Filtrar participantes</label>
@@ -1084,6 +1084,8 @@ function calcUserPointsUpTo(u,rrData,cutoffDate){
         var pred=u.koSc&&u.koSc[r]?u.koSc[r][i]:null;
         var real=rrData.ko[r]?rrData.ko[r][i]:null;
         if(!pred||pred.h===null||pred.a===null||!real||real.h===null||real.a===null)continue;
+        var ksm=KO_SCHEDULE.find(function(x){return x.r===r&&x.i===i;});
+        if(ksm&&ksm.d>cutoffDate)continue; // este partido KO aun no se jugaba al corte
         var predW=pred.h>pred.a?'h':pred.a>pred.h?'a':'draw';
         var realW=real.h>real.a?'h':real.a>real.h?'a':'draw';
         if(predW===realW)koPts+=KO_PTS_WIN;
@@ -1106,6 +1108,12 @@ function getPlayedDates(rrData){
         var sm=SCHEDULE.find(function(m){return m.g===g&&((m.h===hn&&m.a===an)||(m.h===an&&m.a===hn));});
         if(sm)dates[sm.d]=true;
       });
+    });
+  }
+  if(rrData&&rrData.ko){
+    KO_SCHEDULE.forEach(function(x){
+      var real=rrData.ko[x.r]?rrData.ko[x.r][x.i]:null;
+      if(real&&real.h!==null&&real.a!==null)dates[x.d]=true;
     });
   }
   return Object.keys(dates).sort();
@@ -1205,6 +1213,23 @@ function drawEvolChart(){
     if(dates.length>10&&i%Math.ceil(dates.length/10)!==0&&i!==dates.length-1)return;
     var lbl=d.slice(5).replace('-','\/');
     svg+='<text x="'+xPos(i)+'" y="'+(H-padB+20)+'" fill="#8a93a3" font-size="11" text-anchor="middle">'+lbl+'<\/text>';
+  });
+  // Marcadores de inicio de cada fase (linea + etiqueta), ubicados en la primera fecha jugada de la fase
+  var PHASE_STARTS=[
+    {d:'2026-06-11',lbl:'Grupos'},
+    {d:'2026-06-28',lbl:'16avos'},
+    {d:'2026-07-04',lbl:'Octavos'},
+    {d:'2026-07-09',lbl:'Cuartos'},
+    {d:'2026-07-14',lbl:'Semis'},
+    {d:'2026-07-18',lbl:'Final'}
+  ];
+  PHASE_STARTS.forEach(function(ph){
+    var idx=-1;
+    for(var k=0;k<dates.length;k++){if(dates[k]>=ph.d){idx=k;break;}}
+    if(idx<0)return; // la fase aun no tiene partidos jugados
+    var px=xPos(idx),first=(idx===0);
+    if(!first)svg+='<line x1="'+px+'" y1="'+padT+'" x2="'+px+'" y2="'+(H-padB)+'" stroke="#D4AF37" stroke-width="1" stroke-dasharray="5 4" opacity="0.45"/>';
+    svg+='<text x="'+(px+(first?2:4))+'" y="'+(padT+11)+'" fill="#D4AF37" font-size="12.5" font-weight="700" text-anchor="start" opacity="0.9">'+ph.lbl+'<\/text>';
   });
   // Dim (background) lines first, behind the strong ones
   dimNames.forEach(function(name){
