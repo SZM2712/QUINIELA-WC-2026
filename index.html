@@ -1215,6 +1215,7 @@ function drawEvolChart(){
     svg+='<text x="'+xPos(i)+'" y="'+(H-padB+20)+'" fill="#8a93a3" font-size="11" text-anchor="middle">'+lbl+'<\/text>';
   });
   // Marcadores de inicio de cada fase (linea + etiqueta), ubicados en la primera fecha jugada de la fase
+  var _phaseMarks=[];
   var PHASE_STARTS=[
     {d:'2026-06-11',lbl:'Grupos'},
     {d:'2026-06-28',lbl:'16avos'},
@@ -1228,8 +1229,8 @@ function drawEvolChart(){
     for(var k=0;k<dates.length;k++){if(dates[k]>=ph.d){idx=k;break;}}
     if(idx<0)return; // la fase aun no tiene partidos jugados
     var px=xPos(idx),first=(idx===0);
-    if(!first)svg+='<line x1="'+px+'" y1="'+padT+'" x2="'+px+'" y2="'+(H-padB)+'" stroke="#D4AF37" stroke-width="1" stroke-dasharray="5 4" opacity="0.45"/>';
-    svg+='<text x="'+(px+(first?2:4))+'" y="'+(padT+11)+'" fill="#D4AF37" font-size="12.5" font-weight="700" text-anchor="start" opacity="0.9">'+ph.lbl+'<\/text>';
+    if(!first)svg+='<line x1="'+px+'" y1="'+padT+'" x2="'+px+'" y2="'+(H-padB)+'" stroke="#D4AF37" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.7"/>';
+    _phaseMarks.push({px:px,lbl:ph.lbl,first:first});
   });
   // Dim (background) lines first, behind the strong ones
   dimNames.forEach(function(name){
@@ -1243,6 +1244,12 @@ function drawEvolChart(){
     var pts=dates.map(function(d,i){return[xPos(i),yPos(hist[d][name])];});
     svg+='<path d="'+smoothPath(pts)+'" fill="none" stroke="'+color+'" stroke-width="2.75" opacity="1"/>';
     pts.forEach(function(p){svg+='<circle cx="'+p[0]+'" cy="'+p[1]+'" r="3" fill="'+color+'" stroke="#0a0a0a" stroke-width="1"/>';});
+  });
+  // Etiquetas de fase (pildora dorada) encima de todas las lineas para que se lean bien
+  _phaseMarks.forEach(function(mk){
+    var lw=mk.lbl.length*8.4+16,lx=Math.min(mk.px+(mk.first?1:4),W-padR-lw);
+    svg+='<rect x="'+lx+'" y="'+(padT-5)+'" width="'+lw+'" height="21" rx="5" fill="#15110a" stroke="#D4AF37" stroke-width="1.2"/>';
+    svg+='<text x="'+(lx+lw/2)+'" y="'+(padT+10)+'" fill="#F2D27A" font-size="13" font-weight="800" text-anchor="middle">'+mk.lbl+'<\/text>';
   });
   svg+='<\/svg>';
   var lastDate=dates[dates.length-1];
