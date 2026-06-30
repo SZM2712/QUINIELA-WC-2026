@@ -915,7 +915,7 @@ function calcUserPoints(u,rrData){
       for(var i=0;i<n;i++){
         var pred=u.koSc&&u.koSc[r]?u.koSc[r][i]:null;
         var real=rrData.ko[r]?rrData.ko[r][i]:null;
-        if(!pred||pred.h===null||pred.a===null||!real||real.h===null||real.a===null)return;
+        if(!pred||pred.h===null||pred.a===null||!real||real.h===null||real.a===null)continue;
         var predW=pred.h>pred.a?'h':pred.a>pred.h?'a':'draw';
         var realW=real.h>real.a?'h':real.a>real.h?'a':'draw';
         if(predW===realW)koPts+=KO_PTS_WIN;
@@ -1036,6 +1036,14 @@ function computeStreaks(users){
         var exact=!!(pred&&pred.h===real.h&&pred.a===real.a);
         dateMatches.push({d:sm?sm.d:'9999',scored:scored,exact:exact});
       });
+    });
+    KO_SCHEDULE.forEach(function(x){
+      var real=rr.ko&&rr.ko[x.r]?rr.ko[x.r][x.i]:null;
+      if(!real||real.h===null||real.a===null)return;
+      var pred=u.koSc&&u.koSc[x.r]?u.koSc[x.r][x.i]:null;
+      var pw=pred&&pred.h!==null&&pred.a!==null?(pred.h>pred.a?'h':pred.a>pred.h?'a':'d'):null;
+      var rw=real.h>real.a?'h':real.a>real.h?'a':'d';
+      dateMatches.push({d:x.d,scored:!!(pw&&pw===rw),exact:!!(pred&&pred.h!==null&&pred.h===real.h&&pred.a===real.a)});
     });
     dateMatches.sort(function(a,b){return a.d<b.d?-1:a.d>b.d?1:0;});
     var winStreak=0,exactStreak=0;
